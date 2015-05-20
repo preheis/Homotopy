@@ -280,7 +280,32 @@ end
 
 
 function SS = COUNT(At,lambda)
-    %Calculate STURM SEQUENCE
-
+    %At the tridiagonal matrix formed at step t
+    %lambda the predicted eigenvalue
+    %p the polynomial vector
+    %s the number of sign changes
+    
+    n = size(At,1);
+    p = zeros(n,1);
+    SS = 0;
+    
+    p(1) = lambda - At(1,1);
+    
+    if p(1) < 0
+        SS = 1;
+    end
+    
+    p(2) = (lambda-T(2,2))*p(1) - abs(T(1,2))^2;
+    
+    if p(2)*p(1) < 0
+        SS = SS+1;
+    end
+    
+    for i = 3:n
+        p(i) = (lambda-At(i,i))*p(i-1) - abs(At(i-1,i))^2*p(k-2);
+        if p(k)*p(k-1) < 0
+            SS = SS+1;
+        end
+    end
 end
 
