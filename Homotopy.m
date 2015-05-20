@@ -235,10 +235,22 @@ for i = 1:n
     XT(i) = X(i);
 end
 
+
+%If T = 1 and the eigenvalue was acceptable, we store it.
+%We also store the corresponding eigenvector
 if T == 1
-    %GOTO 800
-else
+   
+    EV = zeros(1,n);
+    EVT = zeros(n,n);
     
+    EV(a) = Z;
+    
+    for i = 1:n
+        EVT(i,:) = XT(i);
+    end
+    
+else
+    %Compute the derivative
     H(1) = DDD(1)*X(1)+OO(2)*X(2);
     for i = 2:n-1 
         H(i) = OO(i)*X(i-1)+DDD(i)*X(i)+OO(i+1)*X(i+1);
@@ -253,13 +265,22 @@ else
     
 end
 
+%If the first prediction fails, we use hermite interpolation, which
+%interpolates current and previous eigenvalues together with their
+%derivatives. 
+PH = H; PT = T; H = 1-PT; T = 1;
+
+Q = (1+(H/PH))^2;
+QQ = Q*(H/PH);
+PE = OZ + OZ1*(H+PH)+Q*((Z-OZ)-OZ1*PH)+QQ*(PH*(Z1+OZ1)-2*(Z-OZ));
+%GOTO 200
+
+
 end
 
 
 function SS = COUNT(At,lambda)
     %Calculate STURM SEQUENCE
-    A = At;
-    L = lambda;
-    SS = L-A;
+
 end
 
