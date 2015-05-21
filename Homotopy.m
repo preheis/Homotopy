@@ -1,20 +1,53 @@
-function [EV,EVT ] = Homotopy(A,a)
+function [EV,EVT] = Homotopy(A,a)
 %This function computes the eigenvalues and eigenvectors of a symmetric
 %tridiagonal matrix A. Specify the eigenpair a. 
 
-%%%%%%%%%%
-%%BLOCK1%%
-%%%%%%%%%%
+%call subroutines here
+
+end
+
+%Calculate the number of sign changes using sturm sequence 
+function SS = COUNT(At,lambda)
+    %At the tridiagonal matrix formed at step t
+    %lambda the predicted eigenvalue
+    %p the polynomial vector
+    %s the number of sign changes
+    
+    n = size(At,1);
+    p = zeros(n,1);
+    SS = 0;
+    
+    p(1) = lambda - At(1,1);
+    
+    if p(1) < 0
+        SS = 1;
+    end
+    
+    p(2) = (lambda-T(2,2))*p(1) - abs(T(1,2))^2;
+    
+    if p(2)*p(1) < 0
+        SS = SS+1;
+    end
+    
+    for i = 3:n
+        p(i) = (lambda-At(i,i))*p(i-1) - abs(At(i-1,i))^2*p(k-2);
+        if p(k)*p(k-1) < 0
+            SS = SS+1;
+        end
+    end
+end
+
+%__________________100___________________%
+function [] = initialize(A)
 
 %INITIALIZE HOMOTOPY ALGORITHM
+global n D DD OO DDD XT NS PT T
+
 [n,n] = size(A);
 
 %D is the diagonal of the intial matrix B
 D = zeros(1,n);
 %DD and OO are diagonal and off diagonal elements of A
-DD = zeros(1,n);
-OO = zeros(1,n);
-
 DD = diag(A);
 OO = diag(A,-1);
 OO(1) = 0;
@@ -59,11 +92,19 @@ end
 %Use third order taylor method to predict eigenvalue
 PE = Z + (H*Z1) + (H^2/2)*Z2 + (H^3/6)*Z3;
 
-%%%%%%%%%%
-%%BLOCK2%%
-%%%%%%%%%%
+KKKK = main(PE);
+
+end
+
+%__________________200___________________%
+function KKK = main(PE)
+%Locate the kth eigenpair at t = T, starting with the predicted eigenvalue
+%and using Rayleigh quotient and inverse iteration. If this fails we cut
+%the step size in half and start over from when the problem is initialized.
 
 %Form the one parameter family of matricies;
+global At J APP F G 
+
 t = T;
 
 At = B + t(A-B);
@@ -77,6 +118,10 @@ G = zeros(1,n);
 F = D - T*DDD;
 
 for i = 1:n
+    F(i) = D(i)*DDD(i);
+end
+
+for i = 1:n
     G = T*OO(i);
 end
 
@@ -85,13 +130,10 @@ SC = COUNT(At,PE);
 
 %k is the kth eigenvalue of A(t)
 if SC ~= k && SC ~= k-1 
-    %GOTO 500    
-    if NS == 0
-        %%GOTO 100
-    else
-        %GOTO 700
-    end
+    %GOTO 500
 end
+
+global KK
 
 if SC == k
     KK = 1;
@@ -101,9 +143,16 @@ if SC == k-1
     KK = 0;
 end
 
+KKK = KK;
+
+end
+
+function [] = invit(At,APP,J)
+%Here we calculate inverse iteration and normalize the resulting vector.
 
 %W is real symmetric and tridiagonal. 
 %RES is the norm of the residual vector @ current eigenpair approximation
+global W B Y X
 
 I = eye(n);
 W = At - APP*I;
@@ -117,9 +166,7 @@ for i = 1:n
     Y(i) = X(i);
 end
 
-%WX = Y. Doesnt say what to solve for.
-product = W*X;
-Y = product;
+X = Y\W;
 
 SUM = 0;
 
@@ -146,11 +193,14 @@ NORM = SUMA + SUMB;
 
 EPS = eps*n*NORM;
 
-if T ==1
+global EPS1 EPS2 EPS3
+
+if T == 1
     EPS1 = EPS;
 else
     %arr = [d0*sqrt(EPS),EPS];
     %EPS1 = max(arr);
+    EPS1 = EPS;
 end
 
 EPS2 = EPS; EPS3 = EPS;
@@ -158,14 +208,16 @@ EPS2 = EPS; EPS3 = EPS;
 %Stop correction if residual vector is less than prescribed accuracy
 %Else apply Rayleigh Quotient 
 if RES<=EPS1
-    %GOTO 400
+    checkError();
 else
+    %PAPP isn't used anywhere else in the algorithm. 
     PAPP = APP;
     
     H(1) = F(1)*X(1)+G(2)*X*(2);
     for i = 2:n-1
         H(i) = G(i)*X(i-1)+F(i)*X(i)+G(i+1)*X(i+1);
     end
+    
     H(n) = G(n)*X(n-1)+F(n)*X(n);
     
     APP = 0;
@@ -175,59 +227,72 @@ else
     end
     
     if (KK == 1) && (APP>(PE+EPS2))
-        %GOTO500
+        reduceStep(H,T);
     end
     
     if (KK == 0) && (APP<(PE-EPS2))
-        %GOTO500
+        reduceStep(H,T);
     end
     
     J = J+1;
     
     if J == 10
-        %GOTO500
+        reduceStep(H,T);
     else
-        %GOTO300
+        %recursively call invit 
+        invit(At,APP,J);
     end
-    
 end
 
-val = COUNT(At,APP-EPS1-EPS3);
+end
+
+%__________________400___________________%
+function [] = checkError(APP,EPS1,EPS3)
+
+err1 = APP-EPS1-EPS3;
+
+val = COUNT(At,err1);
 
 if val == k-1
-    %GOTO 600
+    store()
 elseif val > k-1
-    %GOTO 500    
+    reduceStep()  
 else
-   val = COUNT(APP+EPS1+EPS3);
+   err2 = APP+EPS1+EPS3;
+   val = COUNT(err2);
    if val >= k
-       %GOTO 600
+       store()
    end
 end
 
+end
+
+%__________________500___________________%
+function [H,T] = reduceStep(H1,T1)
 %If predicted eigenvale is rejected, we reduce stepsize, alter parameter
 %and redo the prediction
 
-H = H/2; T = PT+H;
+H = H1/2; T = PT+H;
 
 for i = 1:n
     X(i) = XT(i);
 end
 
 if NS == 0
-    %GOTO 100
+    initialize(At);
 else
-    %GOTO 700
+    newPrediction(H,T);
 end
 
+end
 
-%%%%%%%%%%
-%%BLOCK3%%
-%%%%%%%%%%
-
+%__________________600___________________%
+function [] = store(NS,Z,Z1,APP)
 %If the eigepair of At was successfully located in Block 2, we store it if 
 %T = 1, otherwise we compute the eigenvalue derivative and predict the
 %eigen pair again. 
+
+global OZ OZ1 XT X
 
 NS = NS+1; OZ = Z; OZ1 = Z1; Z = APP; 
 
@@ -235,20 +300,10 @@ for i = 1:n
     XT(i) = X(i);
 end
 
-
 %If T = 1 and the eigenvalue was acceptable, we store it.
 %We also store the corresponding eigenvector
 if T == 1
-   
-    EV = zeros(1,n);
-    EVT = zeros(n,n);
-    
-    EV(a) = Z;
-    
-    for i = 1:n
-        EVT(i,:) = XT(i);
-    end
-    
+   storeFinal(Z,XT);
 else
     %Compute the derivative
     H(1) = DDD(1)*X(1)+OO(2)*X(2);
@@ -262,8 +317,12 @@ else
     for i = 1:n
         Z1 = Z1 + X(i)*H(i);
     end
-    
 end
+
+end
+
+%__________________700___________________%
+function PE = newPrediction(H,T)
 
 %If the first prediction fails, we use hermite interpolation, which
 %interpolates current and previous eigenvalues together with their
@@ -273,39 +332,20 @@ PH = H; PT = T; H = 1-PT; T = 1;
 Q = (1+(H/PH))^2;
 QQ = Q*(H/PH);
 PE = OZ + OZ1*(H+PH)+Q*((Z-OZ)-OZ1*PH)+QQ*(PH*(Z1+OZ1)-2*(Z-OZ));
-%GOTO 200
 
+main(PE);
 
 end
 
-
-function SS = COUNT(At,lambda)
-    %At the tridiagonal matrix formed at step t
-    %lambda the predicted eigenvalue
-    %p the polynomial vector
-    %s the number of sign changes
+%__________________800___________________%
+function [EV,EVT] = storeFinal(Z,XT)
+ %Store the final accepted Eigenvalue and Eigenvector   
+    EV = zeros(1,n);
+    EVT = zeros(n,n);
     
-    n = size(At,1);
-    p = zeros(n,1);
-    SS = 0;
+    EV(a) = Z;
     
-    p(1) = lambda - At(1,1);
-    
-    if p(1) < 0
-        SS = 1;
-    end
-    
-    p(2) = (lambda-T(2,2))*p(1) - abs(T(1,2))^2;
-    
-    if p(2)*p(1) < 0
-        SS = SS+1;
-    end
-    
-    for i = 3:n
-        p(i) = (lambda-At(i,i))*p(i-1) - abs(At(i-1,i))^2*p(k-2);
-        if p(k)*p(k-1) < 0
-            SS = SS+1;
-        end
+    for i = 1:n
+        EVT(i) = XT(i);
     end
 end
-
