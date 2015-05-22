@@ -15,10 +15,10 @@ OO = diag(A,-1);
 OO(1) = 0;
 
 %B is the initial matrix
-B = zeros(n,n);
+D = zeros(n,n);
 
 for i = 1:n
-    B(i,i) = DD(i);
+    D1(i,i) = DD(i);
 end
 
 DDD = zeros(1,n);
@@ -33,7 +33,7 @@ XT = zeros(1,n);
 XT(a) = 1;
 
 %Z1, Z2, Z3 are the 1st, 2nd, and 3rd derivatives of Z. 
-Z1 = XT*(A-B)*XT';
+Z1 = XT*(A-D1)*XT';
 Z2 = 0;
 Z3 = 0;
 
@@ -143,7 +143,7 @@ I = eye(n);
 W = At - APP*I;
 
 %B is not used anywhere else in the algorithm
-B = F - APP;
+%B = F - APP;
 
 Y = zeros(1,n);
 
@@ -247,7 +247,7 @@ end
 end
 
 %__________________600___________________%
-    function [NS,OZ,OZ1,Z1] = computeDerivative(NS,Z,Z1,APP)
+function [NS,OZ,OZ1,Z1] = computeDerivative(NS,Z,Z1,APP)
 %If the eigepair of At was successfully located in Block 2, we store it if 
 %T = 1, otherwise we compute the eigenvalue derivative and predict the
 %eigen pair again. 
