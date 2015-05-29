@@ -1,70 +1,55 @@
-function [] = Homotopy(A,a)
-%This function computes the eigenvalues and eigenvectors of a symmetric
-%tridiagonal matrix A. Specify the eigenpair k.
+function [ output_args ] = Homotopy(A,a)
+%UNTITLED Summary of this function goes here
+%   Detailed explanation goes here
 
-[PE,Z,Z1] = block1(A,a);
+global k n OO DDD EPS1 EPS2 EPS3
 
-Z = Z;
-Z1 = Z1;
-
-block2(PE);
-
-block3();
-
-end
-
-function [PE,Z,Z1] = block1(A,a)
-%INITIALIZE HOMOTOPY ALGORITHM
-
-global NS T DDD OO PT
+k = a;
 
 [n,n] = size(A);
 
-%D1 is the diagonal of the intial matrix D
-D1 = zeros(1,n);
-%DD and OO are diagonal and off diagonal elements of A
-DD = diag(A);
-OO = diag(A,-1);
+%DD and OO are the diagonal and off diagonal elements of A
+DD = zeros(1,n);
+OO = zeros(1,n);
+
+for i = 1:n
+    DD(i) = A(i,i);
+end
+
 OO(1) = 0;
 
-%D is the initial matrix
-D = zeros(n,n);
-
-for i = 1:n
-    D(i,i) = DD(i);
+for i = 2:n
+    OO(i) = A(i,i-1);
 end
 
-D1 = diag(D);
-
-DDD = zeros(1,n);
-
 for i = 1:n
-    DDD(i) = DD(i) - D1(i);
+    DDD(i) = DD(i)-OO(i);
 end
 
-%Z is the kth smallest eigenvalue and XT is the corresponding eigenvector.
-Z = D1(a);
+%Compute the 1st 2nd and 3rd eigenvalue derivatives.
+Z = DD(k);
 XT = zeros(1,n);
-XT(a) = 1;
+XT(k) = 1;
 
-%Z1, Z2, Z3 are the 1st, 2nd, and 3rd derivatives of Z. 
-Z1 = XT*(A-D1)*XT';
+Z1 = 0;
 Z2 = 0;
 Z3 = 0;
 
-%V1 and V2 are the eigenvector derivatives of 
-
-%NS = number of steps
-%H = step size
-%T = homotopy parameter
-%PE = predicted eigenvalue 
-
-NS = 0; H = 1; PT = 0; T = 1;
-X = zeros(1,n);
+%NS is the number of steps
+%H is the step size
+%T is the homotopy paramemter
+%PE is the predicted eigenvalue
+NS = 0; H = 1; PT = 0; T = 1; X = zeros(1,n);
 
 for i = 1:n
     X(i) = XT(i);
 end
+
+PE = Z+(H*Z1)+(H^2/2)*Z2+(H^3)*Z3;
+
+mainblock(PE);
+
+%_________________________________________________________________________%
 
 
 %Set the error tolerances
@@ -81,8 +66,6 @@ NORM = SUMA + SUMB;
 
 EPS = eps*n*NORM;
 
-global EPS1 EPS2 EPS3
-
 if T == 1
     EPS1 = EPS;
 else
@@ -93,42 +76,26 @@ end
 
 EPS2 = EPS; EPS3 = EPS;
 
-%__________________100___________________%
-PE = Z + (H*Z1) + (H^2/2)*Z2 + (H^3/6)*Z3;
-
 end
 
-function [] = block2(PE)
-%__________________200___________________%
-%Locate the kth eigenpair at t = T, starting with the predicted eigenvalue
-%and using Rayleigh quotient and inverse iteration. If this fails we cut
-%the step size in half and start over from when the problem is initialized.
-
-%Form the one parameter family of matricies;
-t = T;
-
-At = D + t(A-D);
+function [] = mainblock(NS,PE)
 
 APP = PE;
-%F = zeros(1,n);
+F = zeros(1,n);
 G = zeros(1,n);
 
-F = D - T*DDD;
-
-for j = 1:n
-    F(j) = D(j)*DDD(j);
+for i = 1:n
+    F(i) = D(i)+T*DDD(i);
+    G(i) = T*OO(i);
 end
 
-for j = 1:n
-    G = T*OO(j);
-end
+At = D + t*(A-D);
 
-%Computer Sturm Sequence of At 
-SC = COUNT(At,PE);
+%Calculate the number of changes of the Sturm sequence
+SC = Count(At,PE);
 
-%k is the kth eigenvalue of A(t)
-if SC ~= k && SC ~= k-1 
-    reduceStep(H,PT);
+if SC~=k && SC~= k-1
+    %GOTO 500
 end
 
 if SC == k
@@ -136,177 +103,163 @@ if SC == k
 end
 
 if SC == k-1
-    KK = 0;
+   KK = 0;
 end
 
+I = eye(n);
+W = At-APP*I;
 
-%Here we calculate inverse iteration and normalize the resulting vector.
+B = zeros(1,n);
+Y = zeros(1,n);
 
-%W is real symmetric and tridiagonal. 
-%RES is the norm of the residual vector @ current eigenpair approximation
-for i = 1:j
-    if j == 10
+for i = 1:n
+    B(i) = F(i)-APP;
+    Y(i) = X(i);
+end
+
+%Perform inverse iteration with shift.
+X = Y\W;
+
+SUM = 0;
+
+for i = 1:n
+    SUM = SUM+X(i)^2;
+end
+
+RES = 1/sqrt(SUM);
+
+for i = 1:n
+    X(i) = X(i)*RES;
+end
+
+%If the norm of the residual vector is smaller than the tolerance,
+%correction is stopped. If not, a new approximation for the eigenvalue is
+%computed using the Rayleigh Quotient. 
+
+if RES <= EPS1
+    %GOTO 400
+    val = APP-EPS1-EPS3;
+    
+    sc = COUNT(At,val);
+    
+    if sc == k-1
+        %GOTO 600
+    end
+    
+    if sc > k-1
         %GOTO 500
-    else
-        %Compute inverse iteration with shift 
-        I = eye(n);
-        W = At - APP*I;
-
-        %B is not used anywhere else in the algorithm
-        %B = F - APP;
-
-        Y = zeros(1,n);
-
-        for l = 1:n
-            Y(l) = X(l);
-        end
-
-        X = Y\W;
-
-        SUM = 0;
-
-        for l = 1:n
-            SUM = SUM + X(l)^2;
-        end
-
-        RES = 1/sqrt(SUM);
-
-        for l = 1:n
-            X(l) = X(l)*RES;
-        end
-
-        %Stop correction if residual vector is less than prescribed accuracy
-        %Else apply Rayleigh Quotient 
-        if RES<=EPS1
-            checkError(APP);
-        else
-            %PAPP isn't used anywhere else in the algorithm. 
-            %PAPP = APP;
-
-            H(1) = F(1)*X(1)+G(2)*X*(2);
-            for l = 2:n-1
-                H(l) = G(l)*X(l-1)+F(l)*X(l)+G(l+1)*X(l+1);
-            end
-
-            H(n) = G(n)*X(n-1)+F(n)*X(n);
-
-            APP = 0;
-
-            for l = 1:n
-                APP = APP+X(l)*H(l);
-            end
-
-            if (KK == 1) && (APP>(PE+EPS2))
-                reduceStep(H,T);
-            end
-
-            if (KK == 0) && (APP<(PE-EPS2))
-                reduceStep(H,T);
-            end
+    end
+    
+    if sc < k-1
+        val = APP+EPS1+EPS3;
+        sc = COUNT(At,val);
+        if sc >= k
+            %GO TO 600
         end
     end
+    
 end
 
-%__________________400___________________%
-err1 = APP-EPS1-EPS3;
-
-val = COUNT(At,err1);
-
-if val == k-1
-    computeDerivative()%GOTO 600
-elseif val > k-1
-    reduceStep()%GOTO 500  
-else
-   err2 = APP+EPS1+EPS3;
-   val = COUNT(At,err2);
-   if val >= k
-       computeDerivative()%GOTO 600
-   end
-end
-
-%__________________500___________________%
-%If predicted eigenvale is rejected, we reduce stepsize, alter parameter
-%and redo the prediction
-
-H = H/2; T = PT+H;
-
-for l = 1:n
-    X(l) = XT(l);
-end
-
-if NS == 0
-    initialPrediction();%GOTO 100
-else
-    newPrediction();%GOTO 700n
-end
-end
-
-function [] = block3()
-%__________________600___________________%
-%If the eigepair of At was successfully located in Block 2, we store it if 
-%T = 1, otherwise we compute the eigenvalue derivative and predict the
-%eigen pair again. 
-
-NS = NS+1; OZ = Z; OZ1 = Z1; Z = APP; 
-
-for m = 1:n
-    XT(m) = X(m);
-end
-
+PAPP = APP;
 HA = zeros(1,n);
 
-%If T = 1 and the eigenvalue was acceptable, we store it.
-%We also store the corresponding eigenvector
+for j = 1:10
+    
+    if j == 10
+       reduceStep(NS,H,PT,XT);%GOTO 500
+    end
+    
+    HA(1) = F(1)*X(1)+G(2)*X(2);
+    for i = 2:n-1
+        HA(i) = G(i)*X(i-1)+F(i)*X(i)+G(i+1)*X(i+1);
+    end
+    HA(n) = G(n)*X(n-1)+F(n)*X(n);
+
+    APP = 0;
+    for i = i:n
+        APP = APP+X(i)*HA(i);
+    end
+
+    if KK == 1 && (APP>(PE+EPS2))
+        reduceStep(NS,H,PT,XT);%GOTO 500
+    end
+
+    if KK == 0 && ((APP<PE-EPS2))
+        reduceStep(NS,H,PT,XT);%GOTO 500
+    end
+end
+
+end
+
+%If the predicted or corrected eigenvalue was rejected, we reduce the step
+%size and redo the predicition.
+function [] = reduceStep(NS,H,PT,XT)
+    X = zeros(1,n);
+    H = H/2;
+    T = PT+H;
+    for i = 1:n
+        X(i) = XT(i);
+    end
+    
+    if(NS==0)
+        %GOTO 100
+    else
+       computeANDpredict(NS,Z,Z1,APP,H,T,X);
+    end
+    
+end
+
+function [] = computeANDpredict(NS,Z,Z1,APP,H,T,X)
+
+NS = NS+1; OZ = Z; OZ1 = Z1; Z = APP;
+HA = zeros(1,n);
+
+for i = 1:n
+    XT(i) = X(i);
+end
+
+%If t == 1, we store the eigenpair
 if T == 1
-   storeFinal(Z,XT);
+    store(OZ,XT);
+%If t ~= 1, we recompute the eigenvalue derivative.
 else
-    %Compute the derivative
     HA(1) = DDD(1)*X(1)+OO(2)*X(2);
-    for m = 2:n-1 
-        HA(m) = OO(m)*X(m-1)+DDD(m)*X(m)+OO(m+1)*X(m+1);
+    for i = 2:n-1
+        HA(i) = OO(i)*X(i-1)+DDD(i)*X(i)+OO(i+1)*X(i+1);
     end
     HA(n) = OO(n)*X(n-1)+DDD(n)*X(n);
-    
     Z1 = 0;
-    
-    for m = 1:n
-        Z1 = Z1 + X(m)*HA(m);
+    for i = 1:n
+        Z1 = Z1+X(i)*HA(i);
     end
 end
 
-%__________________700___________________%
-%H step size
-%T homotopy parameter
-
-%If the first prediction fails, we use hermite interpolation, which
-%interpolates current and previous eigenvalues together with their
-%derivatives. 
+%Now we use hermite interpolation to obtain a new eigenvalue prediction.
 PH = H; PT = T; H = 1-PT; T = 1;
-
-Q = (1+(H/PH))^2;
+Q = (1+H/PH);
 QQ = Q*(H/PH);
-PE = OZ + OZ1*(H+PH)+Q*((Z-OZ)-OZ1*PH)+QQ*(PH*(Z1+OZ1)-2*(Z-OZ));
+PE = OZ+OZ1*(H+PH)+Q*((Z-OZ)-OZ*PH)+QQ*(PH*(Z1+OZ1)-2*(Z-OZ));
 
-%__________________800___________________%
-function storeFinal(Z,XT)
-%Store the final accepted Eigenvalue and Eigenvector
-%Z the accepted eigenvalue
-%XT the accept eigenvector
- 
+mainblock(PE)%GOTO 200
+
+end
+
+%if t = 1, we store the kth eigenpair of A 
+function [] = store(Z,XT)
+
 EV = zeros(1,n);
 EVT = zeros(n,n);
-EV(a) = Z;
 
-for p = 1:n
-   EVT(p) = XT(p);
+EV(k) = Z;
+
+for i = 1:n 
+    EVT(i) = XT(i); 
 end
-    
+
 fprintf('%3.10f\n',EV);
 fprintf('%3.10f',EVT);
 
 end
-end
-%_________________END____________________%
 
 %Calculate the number of sign changes using sturm sequence 
 function SS = COUNT(At,lambda)
@@ -338,4 +291,3 @@ function SS = COUNT(At,lambda)
         end
     end
 end
-
