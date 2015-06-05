@@ -1,20 +1,26 @@
-function [ output_args ] = Homotopy(A,a)
-%UNTITLED Summary of this function goes here
-%   Detailed explanation goes here
+function [] = Homotopy(A,a)
+%This function computes the eigenvalues and eigenvectors of a symmetrical
+%tridiagonal matrix.
 
-global k n OO DDD EPS1 EPS2 EPS3
-
+global k n OO DD DDD 
 k = a;
-
-[n,n] = size(A);
+[~,n] = size(A);
+I = eye(n);
+D = zeros(n,n);
 
 %DD and OO are the diagonal and off diagonal elements of A
-DD = zeros(1,n);
-OO = zeros(1,n);
+DD = zeros(n,1);
+OO = zeros(n,1);
 
 for i = 1:n
     DD(i) = A(i,i);
 end
+
+for i = 1:n
+    D(i,i) = DD(i);
+end
+
+%d = diag(D);
 
 OO(1) = 0;
 
@@ -28,18 +34,21 @@ end
 
 %Compute the 1st 2nd and 3rd eigenvalue derivatives.
 Z = DD(k);
-XT = zeros(1,n);
+XT = zeros(n,1);
 XT(k) = 1;
+alpha = 1;
 
-Z1 = 0;
-Z2 = 0;
-Z3 = 0;
+Z1 = XT'*(A-D)*XT;
+XT1 = pinv(Z*I-A)*(A-D)*XT;
+Z2 = -2*(XT1')*XT1-((XT1')*XT1);
+XT2 = 2*(A-D)*XT1+(alpha*Z1*XT1);
+Z3 = -3*(XT1')*XT2-(3*(XT1')*XT2);
 
 %NS is the number of steps
 %H is the step size
 %T is the homotopy paramemter
 %PE is the predicted eigenvalue
-NS = 0; H = 1; PT = 0; T = 1; X = zeros(1,n);
+NS = 0; H = 1; PT = 0; T = 1; X = zeros(n,1);
 
 for i = 1:n
     X(i) = XT(i);
@@ -47,11 +56,35 @@ end
 
 PE = Z+(H*Z1)+(H^2/2)*Z2+(H^3)*Z3;
 
-mainblock(PE);
+mainblock(A,D,PE,XT,PT,T,NS,H,Z,Z1);
+
+end
+
+function [] = prediction(A,D,Z,PT,T,NS,H,X)
+global n
+
+alpha = 1;
+I = eye(n);
+
+XT = X;
+Z1 = XT'*(A-D)*XT;
+XT1 = pinv(Z*I-A)*(A-D)*XT;
+Z2 = -2*(XT1')*XT1-((XT1')*XT1);
+XT2 = 2*(A-D)*XT1+(alpha*Z1*XT1);
+Z3 = -3*(XT1')*XT2-(3*(XT1')*XT2);
+
+PE = Z+(H*Z1)+(H^2/2)*Z2+(H^3)*Z3;
+
+mainblock(A,D,PE,XT,PT,T,NS,H,Z,Z1);
+
+end
+
+
+function [] = mainblock(A,D,PE,XT,PT,T,NS,H,Z,Z1)
+
+global n k OO DD DDD 
 
 %_________________________________________________________________________%
-
-
 %Set the error tolerances
 SUMA = 0;
 SUMB = 0;
@@ -75,27 +108,28 @@ else
 end
 
 EPS2 = EPS; EPS3 = EPS;
-
-end
-
-function [] = mainblock(NS,PE)
+%_________________________________________________________________________%
 
 APP = PE;
-F = zeros(1,n);
-G = zeros(1,n);
+X = XT;
+
+F = zeros(n,1);
+G = zeros(n,1);
 
 for i = 1:n
-    F(i) = D(i)+T*DDD(i);
+    F(i) = D(i,i)+T*DDD(i);
     G(i) = T*OO(i);
 end
+
+t = T;
 
 At = D + t*(A-D);
 
 %Calculate the number of changes of the Sturm sequence
 SC = Count(At,PE);
 
-if SC~=k && SC~= k-1
-    %GOTO 500
+if (SC~=k) && (SC~=k-1)
+    reduceStep(A,D,Z,NS,H,PT,X);%GOTO 500
 end
 
 if SC == k
@@ -109,8 +143,8 @@ end
 I = eye(n);
 W = At-APP*I;
 
-B = zeros(1,n);
-Y = zeros(1,n);
+B = zeros(n,1);
+Y = zeros(n,1);
 
 for i = 1:n
     B(i) = F(i)-APP;
@@ -118,8 +152,7 @@ for i = 1:n
 end
 
 %Perform inverse iteration with shift.
-X = Y\W;
-
+X = linsolve(W,Y);
 SUM = 0;
 
 for i = 1:n
@@ -140,33 +173,34 @@ if RES <= EPS1
     %GOTO 400
     val = APP-EPS1-EPS3;
     
-    sc = COUNT(At,val);
+    sc = Count(At,val);
     
     if sc == k-1
-        %GOTO 600
+        computeANDpredict(A,D,NS,Z,Z1,APP,X,T,H);%GOTO 600
     end
     
     if sc > k-1
-        %GOTO 500
+        reduceStep(A,D,Z,Z1,NS,H,PT,X);%GOTO 500
     end
     
     if sc < k-1
         val = APP+EPS1+EPS3;
-        sc = COUNT(At,val);
+        sc = Count(At,val);
         if sc >= k
-            %GO TO 600
+            computeANDpredict(A,D,NS,Z,Z1,APP,X,T,H)%GO TO 600
         end
     end
     
 end
 
-PAPP = APP;
-HA = zeros(1,n);
+%PAPP is never actually used. 
+%PAPP = APP;
+HA = zeros(n,1);
 
 for j = 1:10
     
     if j == 10
-       reduceStep(NS,H,PT,XT);%GOTO 500
+       reduceStep(A,D,Z,Z1,NS,H,PT,X);%GOTO 500
     end
     
     HA(1) = F(1)*X(1)+G(2)*X(2);
@@ -180,39 +214,45 @@ for j = 1:10
         APP = APP+X(i)*HA(i);
     end
 
-    if KK == 1 && (APP>(PE+EPS2))
-        reduceStep(NS,H,PT,XT);%GOTO 500
+    if (KK == 1) && (APP>(PE+EPS2))
+        reduceStep(A,D,Z,Z1,NS,H,PT,X);%GOTO 500
     end
 
-    if KK == 0 && ((APP<PE-EPS2))
-        reduceStep(NS,H,PT,XT);%GOTO 500
+    if (KK == 0) && (APP<(PE-EPS2))
+        reduceStep(A,D,Z,Z1,NS,H,PT,X);%GOTO 500
     end
 end
 
 end
 
+function [] = reduceStep(A,D,Z,Z1,NS,H,PT,XT)
 %If the predicted or corrected eigenvalue was rejected, we reduce the step
 %size and redo the predicition.
-function [] = reduceStep(NS,H,PT,XT)
-    X = zeros(1,n);
+global n
+
     H = H/2;
     T = PT+H;
+    X = zeros(n,1);
+    
     for i = 1:n
         X(i) = XT(i);
     end
     
     if(NS==0)
-        %GOTO 100
+        prediction(A,D,Z,PT,T,NS,H,X)%GOTO 100
     else
-       computeANDpredict(NS,Z,Z1,APP,H,T,X);
+        computeANDpredict(A,D,NS,Z,Z1,APP,X,T,H);
     end
     
 end
 
-function [] = computeANDpredict(NS,Z,Z1,APP,H,T,X)
+function [] = computeANDpredict(A,D,NS,Z,Z1,APP,X,T,H)
+%Recompute the eigenvalue derivative and then make a new prediction.
+global n OO DDD
 
 NS = NS+1; OZ = Z; OZ1 = Z1; Z = APP;
-HA = zeros(1,n);
+XT = zeros(n,1);
+HA = zeros(n,1);
 
 for i = 1:n
     XT(i) = X(i);
@@ -220,7 +260,7 @@ end
 
 %If t == 1, we store the eigenpair
 if T == 1
-    store(OZ,XT);
+    store(Z,XT);
 %If t ~= 1, we recompute the eigenvalue derivative.
 else
     HA(1) = DDD(1)*X(1)+OO(2)*X(2);
@@ -240,12 +280,13 @@ Q = (1+H/PH);
 QQ = Q*(H/PH);
 PE = OZ+OZ1*(H+PH)+Q*((Z-OZ)-OZ*PH)+QQ*(PH*(Z1+OZ1)-2*(Z-OZ));
 
-mainblock(PE)%GOTO 200
+mainblock(A,D,PE,XT,PT,T,NS,H,Z,Z1);%GOTO 200
 
 end
 
 %if t = 1, we store the kth eigenpair of A 
 function [] = store(Z,XT)
+global EV EVT 
 
 EV = zeros(1,n);
 EVT = zeros(n,n);
@@ -259,35 +300,32 @@ end
 fprintf('%3.10f\n',EV);
 fprintf('%3.10f',EVT);
 
+pause
+
 end
 
-%Calculate the number of sign changes using sturm sequence 
-function SS = COUNT(At,lambda)
-    %At the tridiagonal matrix formed at step t
-    %lambda the predicted eigenvalue
-    %p the polynomial vector
-    %s the number of sign changes
-    
-    n = size(At,1);
-    p = zeros(n,1);
-    SS = 0;
-    
-    p(1) = lambda - At(1,1);
-    
-    if p(1) < 0
-        SS = 1;
+function [Count] = Count(At,x)
+%COUNT finds the number of eigenvalues less than the predicted eigenvale.
+%This ensures that we are on the correct eigenpath.
+%At - the matrix at t = T
+%x - the predicted eigenvalue
+
+Count = 0;
+d = 1;
+a = diag(At);
+b = diag(At,-1);
+[~,n] = size(At);
+
+for i = 1:n-1
+    if i == 1
+        d = a(i)-x;
+    else
+        d = a(i)-x-(b(i)^2)/d;
     end
     
-    p(2) = (lambda-T(2,2))*p(1) - abs(T(1,2))^2;
-    
-    if p(2)*p(1) < 0
-        SS = SS+1;
+    if d < 0
+        Count = Count+1;
     end
-    
-    for i = 3:n
-        p(i) = (lambda-At(i,i))*p(i-1) - abs(At(i-1,i))^2*p(k-2);
-        if p(k)*p(k-1) < 0
-            SS = SS+1;
-        end
-    end
+end
+
 end
