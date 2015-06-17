@@ -12,6 +12,7 @@ function []= newHomotopy(A,a)
 
 global k n OO DDD
 [~,n]=size(A);
+
 k=a;                                 %The kth eigenpair
 D=zeros(n,n);
 DD=diag(A);                          %Diagonal of A
@@ -32,12 +33,12 @@ Z=d(k);
 I=eye(n);
 
 XT=zeros(n,1);
-XT(k)=d(1);
+XT(k)=d(k);
 
 %To predict the eigenvalue we use a third order taylor method. 
 
 Z1=XT'*(A-D)*XT;                     %Compute first derivative
-XT1=pinv(Z*I-A)*(A-D)*XT;
+XT1=(pinv(Z*I-A)*(A-D))*XT;
 Z2=-2*(XT1')*XT1-((XT1')*XT1);       %Compute second derivative
 XT2=2*(A-D)*XT1+(alpha*Z1*XT1);
 Z3=-3*(XT1')*XT2-(3*(XT1')*XT2);     %Compute third derivative 
@@ -50,6 +51,19 @@ X=XT;                                %
 
 PE=Z+(H*Z1)+(H^2/2)*Z2+(H^3/6)*Z3;   %Predict the eigenvalue 
 mainblock(A,D,Z,Z1,H,T,PT,X,PE,NS);  %Begin correction
+
+end
+
+function[] = taylorEstimation()
+%To predict the eigenvalue we use a third order taylor method. 
+
+Z1=XT'*(A-D)*XT;                     %Compute first derivative
+XT1=(pinv(Z*I-A)*(A-D))*XT;
+Z2=-2*(XT1')*XT1-((XT1')*XT1);       %Compute second derivative
+XT2=2*(A-D)*XT1+(alpha*Z1*XT1);
+Z3=-3*(XT1')*XT2-(3*(XT1')*XT2);     %Compute third derivative 
+
+mainblock(A,D,Z,Z1,H,T,PT,X,PE,NS);
 end
 
 
@@ -90,10 +104,10 @@ EPS2 = EPS; EPS3 = EPS;
 APP=PE;
 At = D + T*(A-D);
 sc=Count(At,PE);                               %Compute the number of sign changes
-fprintf('The number of sign changes is %d',sc);
-
+fprintf('The number of sign changes is %d\n',sc);
 if (sc~=k)&&(sc~=k-1)
-    reduceStep(H,PT,XT,NS);                    %Reduce the step size
+    disp('Reducing the step size!');
+    reduceStep(A,D,H,PT,Y,NS,Z,Z1,APP);       %Reduce the step size
 end
 
 if sc==k 
@@ -103,18 +117,23 @@ end
 if sc==k-1
     KK=0;
 end
-fprintf('APP %2.10f',APP);
-fprintf('The number of sign changes is %d',sc);
-fprintf('The number of sign changes is %d',sc);
+
+fprintf('The value of KK is %d\n',KK);
+fprintf('The approximate eigenvalue is %2.10f\n',APP);
+disp('The predicted eigenvector is: ');
+disp(Y');
 
 for i = 1:10
 [X,RES] = II(A,Y,APP,1);                       %Perform inverse iteration
 if RES<=1e-10
    sc=Count(APP-EPS1-EPS3);                    %Compute the number of sign changes
+   fprintf('The number of sign changes is %d\n',sc);
    if sc==k-1
-      predict(A,D,NS,Z,Z1,APP,X,H,T);          %Store/Recompute 
-   elseif sc>k-1 
-      reduceStep(A,D,H,PT,XT,NS,Z,Z1,APP);     %Reduce the step size 
+      predict(A,D,NS,Z,Z1,APP,X,H,T);          %Store/Recompute
+      return
+   elseif sc>k-1
+      disp('Reducing the step size!');
+      reduceStep(A,D,H,PT,X,NS,Z,Z1,APP);     %Reduce the step size 
    else
       sc=Count(APP+EPS1+EPS3);
       if sc>=k
@@ -122,17 +141,23 @@ if RES<=1e-10
       end
    end
 end
+fprintf('The Residual value is: %2.20f\n',RES);
 
 PE=RQI(A,X,1);                                 %Perform Rayleigh Quotient Iteration
+fprintf('The corrected eigenvalue is %2.20f\n',PE);
 APP=PE;
 Y=X;
+disp('The corrected eigenvector is: ');
+disp(Y');
 
 if KK==1&&(APP>(PE+EPS2))                      %Check if APP is reasonable
-    reduceStep(A,D,H,PT,XT,NS,Z,Z1,APP);       %Reduce the step size
+    disp('Reducing the step size!');
+    reduceStep(A,D,H,PT,Y,NS,Z,Z1,APP);        %Reduce the step size
 end
 
-if KK==0&&(APP<(PE-EPS2))                      %Check if APP is reasonable 
-    reduceStep(A,D,H,PT,XT,NS,Z,Z1,APP);       %Reduce the step size
+if KK==0&&(APP<(PE-EPS2))                      %Check if APP is reasonable
+    disp('Reducing the step size!');   
+    reduceStep(A,D,H,PT,Y,NS,Z,Z1,APP);        %Reduce the step size
 end
 
 if i==10
@@ -143,11 +168,11 @@ end
 
 function[]=reduceStep(A,D,H,PT,XT,NS,Z,Z1,APP)
 H=H/2;                                         %Cut step size in half
-T=PT+H;                                        %Increase the homotopy parameter
+T=PT+H;                                        %Decrease the homotopy parameter
 X=XT;
 
 if NS==0
-    %GOTO 100
+    taylorEstimation();                        %Use third order taylor method to predict again
 else
     predict(A,D,NS,Z,Z1,APP,X,H,T);            %Predict eigenvalue with hermite interpolation or store the result
 end
@@ -160,9 +185,11 @@ function [] = predict(A,D,NS,Z,Z1,APP,X,H,T)
 
 global n OO DDD
 NS=NS+1;OZ=Z;OZ1=Z1;Z=APP;XT=X;
-
+fprintf('The value of T is %2.20f\n',T);
 if T==1
+    disp('Storing the eigenvalues and eigenvectors!');
     store(Z,XT);
+    return
 else
     HA = zeros(n,1);
     HA(1)=DDD(1)*X(1)+OO(2)*X(2);
@@ -194,6 +221,11 @@ EV(k)=Z;
 for i=1:n
    EVT(i,k)=XT(i);
 end
+
+disp('The eigenvalues are: ');
+disp(EV);
+disp('The eigenvectors are: ');
+disp(EVT);
 end
 
 function [Count] = Count(At,x)
@@ -201,21 +233,20 @@ function [Count] = Count(At,x)
 %This ensures that we are on the correct eigenpath.
 %At - the matrix at t = T
 %x - the predicted eigenvalue
-Count=0;
+Count = 0;
 d=1;
-a=diag(At);
-b=diag(At,-1);
 [~,n]=size(At);
- 
-for i=1:n-1
-    if i==1
-        d=a(i)-x;
-    else
-        d=a(i)-x-(b(i)^2)/d;
-    end
-     
-    if d<0
-        Count=Count+1;
+a=diag(At);
+b=zeros(n,1);
+b(1)=0;
+for i=2:n
+    b(i)=At(i,i-1);
+end
+
+for i = 1:n
+    d = a(i)-x-(b(i)^2)/d;
+    if d < 0
+        Count = Count+1;
     end
 end
 end
@@ -231,9 +262,7 @@ for j=1:k
     X=W\Y;
 end
 Y=X/norm(X);
-disp(Y);
-RES=1/norm(X);
-disp(RES);
+RES = 1/norm(X);
 end
 
 function [PE] = RQI(A,x,k)
@@ -243,12 +272,11 @@ for j = 1:k
     u = x/norm(x);
     PE = u'*A*u;
     As = A-PE*eye(size(A));
-    disp(rcond(As));
+    fprintf('The condition of the matrix is: %2.20f\n',rcond(As));
     if rcond(As)< eps
         break
     end
     x = (As)\u;
 end
 PE = u'*A*u;
-disp(PE);
 end
