@@ -5,18 +5,17 @@ function [Count] = COUNT(At,x)
 %x - the predicted eigenvalue
 
 Count = 0;
-d = 1;
-a = diag(At);
-b = diag(At,-1);
-[~,n] = size(At);
+d=1;
+[~,n]=size(At);
+a=diag(At);
+b=zeros(n,1);
+b(1)=0;
+for i=2:n
+    b(i)=At(i,i-1);
+end
 
-for i = 1:n-1
-    if i == 1
-        d = a(i)-x;
-    else
-        d = a(i)-x-(b(i)^2)/d;
-    end
-    
+for i = 1:n
+    d = a(i)-x-(b(i)^2)/d;
     if d < 0
         Count = Count+1;
     end
