@@ -10,17 +10,23 @@ function []= newHomotopy(A,a)
 %of the initial diagonal matrix D. It also determines the predicted 
 %eigenvalue at the next step by using Taylor method. 
 
-global k n OO DDD
+global k n OO DDD DD
 [~,n]=size(A);
 
 k=a;                                 %The kth eigenpair
 D=zeros(n,n);
 DD=diag(A);                          %Diagonal of A
-OO=diag(A,-1);                       %Off-diagonal of A
+OO=zeros(n,1);                       %Off-diagonal of A
 
 for i=1:n
     D(i,i)=DD(i); 
 end
+OO(1)=0;
+
+for i=2:n
+    OO(i)=A(i-1,i);
+end
+
 d=diag(D);                           %Diagonal of D
 
 DDD = zeros(n,1);
@@ -33,7 +39,7 @@ Z=d(k);
 I=eye(n);
 
 XT=zeros(n,1);
-XT(k)=d(k);
+XT(k)=d(1);
 
 %To predict the eigenvalue we use a third order taylor method. 
 
@@ -43,59 +49,59 @@ Z2=-2*(XT1')*XT1-((XT1')*XT1);       %Compute second derivative
 XT2=2*(A-D)*XT1+(alpha*Z1*XT1);
 Z3=-3*(XT1')*XT2-(3*(XT1')*XT2);     %Compute third derivative 
 
-NS=0;                                %Number of steps
-H=1;                                 %Step size
-PT=0;                                %Partial T
-T=1;                                 %Homotopy paramemter
-X=XT;                                %
+NS=0;H=1;PT=0;T=1;X=XT;                             
 
 PE=Z+(H*Z1)+(H^2/2)*Z2+(H^3/6)*Z3;   %Predict the eigenvalue 
 mainblock(A,D,Z,Z1,H,T,PT,X,PE,NS);  %Begin correction
 
 end
 
-function[] = taylorEstimation()
+function[] = taylorEstimation(A,D,Z,XT,H,T,PT,NS)
 %To predict the eigenvalue we use a third order taylor method. 
-
-Z1=XT'*(A-D)*XT;                     %Compute first derivative
-XT1=(pinv(Z*I-A)*(A-D))*XT;
-Z2=-2*(XT1')*XT1-((XT1')*XT1);       %Compute second derivative
-XT2=2*(A-D)*XT1+(alpha*Z1*XT1);
-Z3=-3*(XT1')*XT2-(3*(XT1')*XT2);     %Compute third derivative 
-
-mainblock(A,D,Z,Z1,H,T,PT,X,PE,NS);
+ global n 
+ I = eye(n);
+ alpha = 1;
+ 
+ Z1=XT'*(A-D)*XT;                     %Compute first derivative
+ XT1=(pinv(Z*I-A)*(A-D))*XT;
+ Z2=-2*(XT1')*XT1-((XT1')*XT1);       %Compute second derivative
+ XT2=2*(A-D)*XT1+(alpha*Z1*XT1);
+ Z3=-3*(XT1')*XT2-(3*(XT1')*XT2);     %Compute third derivative 
+ PE=Z+(H*Z1)+(H^2/2)*Z2+(H^3/6)*Z3;   %Predict the eigenvalue 
+ 
+ 
+mainblock(A,D,Z,Z1,H,T,PT,XT,PE,NS);
 end
 
 
 function [] = mainblock(A,D,Z,Z1,H,T,PT,Y,PE,NS)
-global k n 
+global k n DD OO
 %Set the error tolerances
 SUMA=0;
 SUMB=0;
-DD=diag(A);
-OO=diag(A,-1);
+
 for i = 1:n
     SUMA=SUMA+abs(DD(i));
 end
 
-for i=1:n-1
+for i=1:n
     SUMB=SUMB+abs(OO(i));
 end
 
 %NORM is defined as the sum of the sum of diagonal and off diagonal elements 
 NORM = SUMA + SUMB;
 
-EPS = eps*n*NORM;
+EPS=(eps/2)*n*NORM;
 
-if T == 1
-    EPS1 = EPS;
+if T==1
+    EPS1=EPS;
 else
-    dt = norm(pinv(eye(n)-D));
-    arr = [dt*sqrt(EPS),EPS];
-    EPS1 = max(arr);
+    dt=norm(pinv(eye(n)-D));
+    arr=[dt*sqrt(EPS),EPS];
+    EPS1=max(arr);
 end
 
-EPS2 = EPS; EPS3 = EPS;
+EPS2=EPS;EPS3=EPS;
 
 %%%%%%%%%%%%
 %%%BLOCK2%%%
@@ -124,57 +130,61 @@ disp('The predicted eigenvector is: ');
 disp(Y');
 
 for i = 1:10
-[X,RES] = II(A,Y,APP,1);                       %Perform inverse iteration
-if RES<=1e-10
-   sc=Count(APP-EPS1-EPS3);                    %Compute the number of sign changes
+[X,RES] = II(At,Y,APP,1);                            %Perform inverse iteration
+fprintf('The Residual value is: %2.20f\n',RES);
+if RES<=EPS1
+   sc=Count(At,APP-EPS1-EPS3);                       %Compute the number of sign changes
    fprintf('The number of sign changes is %d\n',sc);
    if sc==k-1
-      predict(A,D,NS,Z,Z1,APP,X,H,T);          %Store/Recompute
+      predict(A,D,NS,Z,Z1,APP,X,H,T);                %Store/Recompute
       return
    elseif sc>k-1
       disp('Reducing the step size!');
-      reduceStep(A,D,H,PT,X,NS,Z,Z1,APP);     %Reduce the step size 
+      reduceStep(A,D,H,PT,X,NS,Z,Z1,APP);            %Reduce the step size 
    else
       sc=Count(APP+EPS1+EPS3);
       if sc>=k
-         predict(A,D,NS,Z,Z1,APP,X,H,T);       %Store/Recompute
+         predict(A,D,NS,Z,Z1,APP,X,H,T);             %Store/Recompute
       end
    end
 end
-fprintf('The Residual value is: %2.20f\n',RES);
 
-PE=RQI(A,X,1);                                 %Perform Rayleigh Quotient Iteration
-fprintf('The corrected eigenvalue is %2.20f\n',PE);
-APP=PE;
+APP=RQI(A,X,1);                                      %Perform Rayleigh Quotient Iteration
+fprintf('The corrected eigenvalue is %2.20f\n',APP);
 Y=X;
 disp('The corrected eigenvector is: ');
 disp(Y');
 
-if KK==1&&(APP>(PE+EPS2))                      %Check if APP is reasonable
+if KK==1&&(APP>(PE+EPS2))                            %Check if APP is reasonable
     disp('Reducing the step size!');
-    reduceStep(A,D,H,PT,Y,NS,Z,Z1,APP);        %Reduce the step size
+    reduceStep(A,D,H,PT,Y,NS,Z,Z1,APP);              %Reduce the step size
 end
 
-if KK==0&&(APP<(PE-EPS2))                      %Check if APP is reasonable
+if KK==0&&(APP<(PE-EPS2))                            %Check if APP is reasonable
     disp('Reducing the step size!');   
-    reduceStep(A,D,H,PT,Y,NS,Z,Z1,APP);        %Reduce the step size
+    reduceStep(A,D,H,PT,Y,NS,Z,Z1,APP);              %Reduce the step size
 end
 
 if i==10
-    reduceStep(A,D,H,PT,Y,NS,Z,Z1,APP);        %Reduce the step size
+    reduceStep(A,D,H,PT,Y,NS,Z,Z1,APP);              %Reduce the step size
 end
 end
 end
 
 function[]=reduceStep(A,D,H,PT,XT,NS,Z,Z1,APP)
-H=H/2;                                         %Cut step size in half
-T=PT+H;                                        %Decrease the homotopy parameter
+H=H/2;                                               %Cut step size in half
+T=PT+H;                                              %Decrease the homotopy parameter
 X=XT;
 
+fprintf('The value of H is %2.20f\n',H);
+fprintf('The value of T is %2.20f\n',T);
+fprintf('The number of steps is %d',NS)
+
+
 if NS==0
-    taylorEstimation();                        %Use third order taylor method to predict again
+    taylorEstimation(A,D,Z,XT,H,T,PT,NS);            %Use third order taylor method to predict again
 else
-    predict(A,D,NS,Z,Z1,APP,X,H,T);            %Predict eigenvalue with hermite interpolation or store the result
+    predict(A,D,NS,Z,Z1,APP,X,H,T);                  %Predict eigenvalue with hermite interpolation or store the result
 end
 end
 
@@ -191,7 +201,7 @@ if T==1
     store(Z,XT);
     return
 else
-    HA = zeros(n,1);
+    HA=zeros(n,1);
     HA(1)=DDD(1)*X(1)+OO(2)*X(2);
     for i=2:n-1
         HA(i)=OO(i)*X(i-1)+DDD(i)*X(i)+OO(i+1)*X(i+1);
@@ -205,6 +215,7 @@ end
 
 PH=H;PT=T;H=1-PT;T=1;
 %Use hermite interpolation to get a new prediction.
+disp('Using hermite interpolation to predict the eigenvalue!');
 Q=(1+(H/PH))^2;
 QQ=Q*(H/PH);
 PE=OZ+OZ1*(H+PH)+Q*((Z-OZ)-(OZ1*PH))+QQ*(PH*(Z1+OZ1)-2*(Z-OZ));
@@ -243,15 +254,15 @@ for i=2:n
     b(i)=At(i,i-1);
 end
 
-for i = 1:n
-    d = a(i)-x-(b(i)^2)/d;
-    if d < 0
-        Count = Count+1;
+for i=1:n
+    d=a(i)-x-(b(i)^2)/d;
+    if d<0
+        Count=Count+1;
     end
 end
 end
 
-function [Y,RES] = II(A,X,APP,k)
+function [Y,RES]=II(A,X,APP,k)
 %Perform inverse iteration to obtain a better approximate eigenvector.
 W=A-APP*eye(size(A));
 for j=1:k
@@ -262,21 +273,22 @@ for j=1:k
     X=W\Y;
 end
 Y=X/norm(X);
-RES = 1/norm(X);
+RESVEC=A*Y-APP*Y;
+RES=max(RESVEC);
 end
 
-function [PE] = RQI(A,x,k)
+function [APP] = RQI(A,x,k)
 %Perform Rayleigh quotient iteration to obtain a better approximate
 %eigenvale. 
 for j = 1:k
     u = x/norm(x);
-    PE = u'*A*u;
-    As = A-PE*eye(size(A));
-    fprintf('The condition of the matrix is: %2.20f\n',rcond(As));
+    APP = u'*A*u;
+    As = A-APP*eye(size(A));
+    %fprintf('The condition of the matrix is: %2.20f\n',rcond(As));
     if rcond(As)< eps
         break
     end
     x = (As)\u;
 end
-PE = u'*A*u;
+APP = u'*A*u;
 end
