@@ -1,6 +1,7 @@
-function []= newHomotopy(A,a)
-%UNTITLED6 Summary of this function goes here
-%   Detailed explanation goes here
+function []= newHomotopy(A)
+%This program computes all of the eigenvalues of a symmetric tridiagonal
+%matrix with well-separated eigenvalues.
+%A - the matrix whose eigenvalues we are looking for.
 
 %%%%%%%%%%%%
 %%%BLOCK1%%%
@@ -10,10 +11,14 @@ function []= newHomotopy(A,a)
 %of the initial diagonal matrix D. It also determines the predicted 
 %eigenvalue at the next step by using Taylor method. 
 
-global k n OO DDD DD
-[~,n]=size(A);
+global k n OO DDD DD EV EVT
 
-k=a;                                    %The kth eigenpair
+[~,n]=size(A);
+EV=zeros(n,1);
+EVT=zeros(n,n);
+for j=1:n
+    
+k=j;                                    %The kth eigenpair
 D=zeros(n,n);
 DD=diag(A);                          %Diagonal of A
 OO=zeros(n,1);                       %Off-diagonal of A
@@ -24,10 +29,11 @@ end
 OO(1)=0;
 
 for i=2:n
-    OO(i)=A(i-1,i);
+   OO(i)=A(i-1,i);
 end
 
 d=diag(D);                           %Diagonal of D
+
 
 DDD = zeros(n,1);
 for i=1:n
@@ -53,7 +59,7 @@ NS=0;H=1;PT=0;T=1;X=XT;
 
 PE=Z+(H*Z1)+(H^2/2)*Z2+(H^3/6)*Z3;   %Predict the eigenvalue 
 mainblock(A,D,Z,Z1,H,T,PT,X,XT,PE,NS);  %Begin correction
-
+end
 end
 
 function[] = taylorEstimation(A,D,Z,X,XT,H,T,PT,NS)
@@ -92,16 +98,16 @@ end
 %NORM is defined as the sum of the sum of diagonal and off diagonal elements 
 NORM = SUMA + SUMB;
 
-EPS = eps*n*NORM;
+EPS=(eps/2)*n*NORM;
 
-if T == 1
-    EPS1 = EPS;
+if T==1
+    EPS1=EPS;
 else
-    dt = norm(pinv(eye(n)-D));
-    arr = [dt*sqrt(EPS),EPS];
-    EPS1 = max(arr);
+    dt=norm(pinv(eye(n)-D));
+    arr=[dt*sqrt(EPS),EPS];
+    EPS1=max(arr);
 end
-EPS2 = EPS; EPS3 = EPS;
+EPS2=EPS; EPS3=EPS;
 fprintf('The roundoff error is: %2.20f\n',EPS1);
 
 %%%%%%%%%%%%
@@ -135,8 +141,8 @@ disp(Y');
 
 for i = 1:10
 [Y,RES] = II(At,Y,APP,1);                            %Perform inverse iteration
-fprintf('The Residual value is: %2.20f\n',RES);
-fprintf('The roundoff error is: %2.20f\n',EPS1);
+fprintf('The Residual value is: %2.20e\n',RES);
+fprintf('The roundoff error is: %2.20e\n',EPS1);
 if RES<=EPS1
    sc=Count(At,APP-EPS1-EPS3);                       %Compute the number of sign changes
    fprintf('The number of sign changes is %d\n',sc);
@@ -214,7 +220,6 @@ if T==1
     disp('Storing the eigenvalues and eigenvectors!');
     store(Z,XT);
     return
-    
 else
     HA=zeros(n,1);
     HA(1)=DDD(1)*X(1)+OO(2)*X(2);
@@ -239,20 +244,27 @@ fprintf('The new predicted eigenvalue is: %2.20f\n',PE);
 mainblock(A,D,Z,Z1,H,T,PT,X,XT,PE,NS);
 end
 
-function [EV,EVT] = store(Z,XT)
-global k n
-EV=zeros(n,1);
-EVT=zeros(n,n);
+function [] = store(Z,XT)
+global n k EV EVT
+% EV=zeros(n,1);
+% EVT=zeros(n,n);
+% 
+% EV(k)=Z;
+% for i=1:n
+%    EVT(i,k)=XT(i);
+% end
+fprintf('\n\n')
 
 EV(k)=Z;
 for i=1:n
    EVT(i,k)=XT(i);
 end
 
-disp('The eigenvalues are: ');
-disp(EV);
-disp('The eigenvectors are: ');
-disp(EVT);
+if k==n
+    disp(EV);
+    disp(EVT);
+end
+
 end
 
 function [Count] = Count(At,x)
