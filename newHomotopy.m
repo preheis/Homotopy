@@ -1,4 +1,4 @@
-function []= newHomotopy(A)
+function []= newHomotopy(A,a)
 %This program computes all of the eigenvalues of a symmetric tridiagonal
 %matrix with well-separated eigenvalues.
 %A - the matrix whose eigenvalues we are looking for.
@@ -16,24 +16,23 @@ global k n OO DDD DD EV EVT
 [~,n]=size(A);
 EV=zeros(n,1);
 EVT=zeros(n,n);
-for j=1:n
-    
-k=j;                                    %The kth eigenpair
+%for j=1:n  
+k=a;                                    %The kth eigenpair
 D=zeros(n,n);
 DD=diag(A);                          %Diagonal of A
 OO=zeros(n,1);                       %Off-diagonal of A
 
- for i=1:n
-     D(i,i)=DD(i)+1; 
- end
+  for i=1:n
+      D(i,i)=DD(i); 
+  end
 
-% for i=1:n
+%  for i=1:n
 %     if i==1
-%         D(i,i)=(1+(4/n));
-%     else
-%         D(i,i)=(2+(i*(4/n)));
-%     end
-% end
+%          D(i,i)=(1+(4/n));
+%      else
+%          D(i,i)=(2+(i*(4/n)));
+%      end
+%  end
 
 OO(1)=0;
 
@@ -48,38 +47,39 @@ for i=1:n
     DDD(i) = DD(i)-d(i);
 end
 
-alpha=-1.0;
+alpha=0;
 Z=d(k);
 I=eye(n);
 
 XT=zeros(n,1);
 XT(k)=1;
 
-%To predict the eigenvalue we use a third order taylor method. 
-
+% %To predict the eigenvalue we use a third order taylor method. 
+ 
 Z1=XT'*(A-D)*XT;                     %Compute first derivative
 XT1=(pinv(Z*I-A)*(A-D))*XT;
 Z2=-2*(XT1')*XT1-((XT1')*XT1);       %Compute second derivative
 XT2=2*(A-D)*XT1+(alpha*Z1*XT1);
 Z3=-3*(XT1')*XT2-(3*(XT1')*XT2);     %Compute third derivative 
-
+ 
 NS=0;H=1;PT=0;T=1;X=XT;                             
-
+ 
 PE=Z+(H*Z1)+(H^2/2)*Z2+(H^3/6)*Z3;   %Predict the eigenvalue 
 fprintf('The predicted eigenvalue is: %2.5e\n',PE);
 mainblock(A,D,Z,Z1,H,T,PT,X,XT,PE,NS);  %Begin correction
-end
+%end
 end
 
 function[] = taylorEstimation(A,D,Z,X,XT,H,T,PT,NS)
 %To predict the eigenvalue we use a third order taylor method. 
 global n 
 I = eye(n);
-alpha = 2;
-At = D+T*(A-D);
- 
+alpha = -1;
+%At = D+T*(A-D);
+
+disp('Using Taylor Method to predict eigenvale');
 Z1=XT'*(A-D)*XT;                     %Compute first derivative
-XT1=(pinv(Z*I-At)*(A-D))*XT;
+XT1=(pinv(Z*I-A)*(A-D))*XT;
 Z2=-2*(XT1')*XT1-((XT1')*XT1);       %Compute second derivative
 XT2=2*(A-D)*XT1+(alpha*Z1*XT1);
 Z3=-3*(XT1')*XT2-(3*(XT1')*XT2);     %Compute third derivative 
@@ -147,7 +147,7 @@ Y=X;
 fprintf('The value of KK is %d\n',KK);
 fprintf('The approximate eigenvalue is %2.10f\n',APP);
 disp('The predicted eigenvector is: ');
-disp(Y');
+%disp(Y');
 pause
 for i = 1:10
 [Y,RES] = II(At,Y,APP,1);                            %Perform inverse iteration
@@ -222,7 +222,7 @@ function [] = predict(A,D,NS,Z,Z1,APP,X,H,T)
 %%%BLOCK3%%%
 %%%%%%%%%%%%
 
-global n OO DDD
+global n k OO DDD
 NS=NS+1;OZ=Z;OZ1=Z1;Z=APP;XT=X;
 fprintf('The value of T is %2.5e\n',T);
 if T==1
@@ -241,13 +241,24 @@ else
         Z1=Z1+X(i)*HA(i);
     end
 end
-
+fprintf('Z is: %2.5e\n',Z);
+fprintf('Z1 is: %2.5e\n',Z1);
+fprintf('OZ is: %2.5e\n',OZ);
+fprintf('OZ1 is: %2.5e\n',OZ1);
+%disp('XT is: ');
+%disp(XT);
 PH=H;PT=T;H=1-PT;T=1;
+fprintf('PT is: %2.5e\n',PT);
+fprintf('PH is: %2.5e\n',PH);
+fprintf('H is: %2.5e\n',H);
 %Use hermite interpolation to get a new prediction.
 disp('Using hermite interpolation to predict the eigenvalue!');
 Q=(1+(H/PH))^2;
+fprintf('Q is: %2.5e\n',Q);
 QQ=Q*(H/PH);
-PE=OZ+OZ1*(H+PH)+Q*((Z-OZ)-(OZ1*PH))+QQ*(PH*(Z1+OZ1)-2*(Z-OZ));
+fprintf('QQ is: %2.5e\n',QQ);
+PE=OZ+OZ1*(H+PH)+Q*((Z-OZ)-OZ1*PH)+QQ*(PH*(Z1+OZ1)-2*(Z-OZ));
+
 fprintf('The value of T is: %2.5e\n',T);
 fprintf('The new predicted eigenvalue is: %2.5e\n',PE);
 pause
@@ -265,22 +276,23 @@ for i=1:n
 end
 
 disp(EV);
-disp(EVT);
+%disp(EVT);
 
 if k==n
     A=matGen(n,1);
+    disp('The eigenvalues are: ')
     disp(EV);
-    disp(EVT);
+    disp('The eigenvectors are: ')
+    %disp(EVT);
     ORT=EVT'*EVT-eye(n);
     disp('The maximum orthogonality is: ');
     disp(max(max(ORT)));
-    disp('The residuals are: ')
-    
+    disp('The maximum residual is: ')
     for i=1:n
-        RES=A*EVT(:,i)-EV(i)*EVT(:,i);
-        RES=max(RES);
-        disp(RES);
-    end 
+        RES = A*EVT(:,i)-EV(i)*EVT(:,i);
+    end
+    RES = max(RES);
+    disp(RES);
 end
 end
 
@@ -317,8 +329,7 @@ for j=1:k
 end
 Y=X/norm(X);
 RES=A*Y-APP*Y;
-RES=max(RES);
-
+RES=abs(max(RES));
 end
 
 function [APP]=RQI(A,X,k)
