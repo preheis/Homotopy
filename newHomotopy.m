@@ -47,7 +47,7 @@ for i=1:n
     DDD(i) = DD(i)-d(i);
 end
 
-alpha=0;
+alpha=1;
 Z=d(k);
 I=eye(n);
 
@@ -74,7 +74,7 @@ function[] = taylorEstimation(A,D,Z,X,XT,H,T,PT,NS)
 %To predict the eigenvalue we use a third order taylor method. 
 global n 
 I = eye(n);
-alpha = -1;
+alpha = 1;
 %At = D+T*(A-D);
 
 disp('Using Taylor Method to predict eigenvale');
@@ -258,10 +258,12 @@ fprintf('Q is: %2.5e\n',Q);
 QQ=Q*(H/PH);
 fprintf('QQ is: %2.5e\n',QQ);
 PE=OZ+OZ1*(H+PH)+Q*((Z-OZ)-OZ1*PH)+QQ*(PH*(Z1+OZ1)-2*(Z-OZ));
-
 fprintf('The value of T is: %2.5e\n',T);
 fprintf('The new predicted eigenvalue is: %2.5e\n',PE);
 pause
+if PH==H
+     taylorEstimation(A,D,Z,X,XT,H,T,PT,NS)
+end
 mainblock(A,D,Z,Z1,H,T,PT,X,XT,PE,NS);
 end
 
