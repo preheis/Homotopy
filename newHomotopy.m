@@ -1,4 +1,4 @@
-function []= newHomotopy(A,a)
+function []= newHomotopy(A)
 %This program computes all of the eigenvalues of a symmetric tridiagonal
 %matrix with well-separated eigenvalues.
 %A - the matrix whose eigenvalues we are looking for.
@@ -16,8 +16,8 @@ global k n OO DDD DD EV EVT
 [~,n]=size(A);
 EV=zeros(n,1);
 EVT=zeros(n,n);
-%for j=1:n  
-k=a;                                    %The kth eigenpair
+for j=1:n
+k=j;                                    %The kth eigenpair
 D=zeros(n,n);
 DD=diag(A);                          %Diagonal of A
 OO=zeros(n,1);                       %Off-diagonal of A
@@ -67,7 +67,7 @@ NS=0;H=1;PT=0;T=1;X=XT;
 PE=Z+(H*Z1)+(H^2/2)*Z2+(H^3/6)*Z3;   %Predict the eigenvalue 
 fprintf('The predicted eigenvalue is: %2.5e\n',PE);
 mainblock(A,D,Z,Z1,H,T,PT,X,XT,PE,NS);  %Begin correction
-%end
+end
 end
 
 function[] = taylorEstimation(A,D,Z,X,XT,H,T,PT,NS)
@@ -128,7 +128,7 @@ APP=PE;
 fprintf('The value of T is: %2.20f\n',T);
 sc=Count(At,PE);                               %Compute the number of sign changes
 fprintf('The number of sign changes is %d\n',sc);
-pause
+%pause
 if (sc~=k)&&(sc~=k-1)
     disp('Reducing the step size!');
     reduceStep(A,D,H,PT,XT,NS,Z,Z1,APP);       %Reduce the step size
@@ -148,12 +148,12 @@ fprintf('The value of KK is %d\n',KK);
 fprintf('The approximate eigenvalue is %2.10f\n',APP);
 disp('The predicted eigenvector is: ');
 %disp(Y');
-pause
+%pause
 for i = 1:10
 [Y,RES] = II(At,Y,APP,1);                            %Perform inverse iteration
 fprintf('The Residual value is: %2.20e\n',RES);
 fprintf('The roundoff error is: %2.20e\n',EPS1);
-pause
+%pause
 if RES<=EPS1
    sc=Count(At,APP-EPS1-EPS3);                       %Compute the number of sign changes
    fprintf('The number of sign changes is %d\n',sc);
@@ -175,7 +175,7 @@ end
 
 APP=RQI(At,Y,1);                                      %Perform Rayleigh Quotient Iteration
 fprintf('The corrected eigenvalue is %2.5e\n',APP);
-pause
+%pause
 if KK==1&&(APP>(PE+EPS2))%Check if APP is reasonable
     fprintf('APP is: %2.5e\n',APP);
     fprintf('PE + EPS2 is: %2.5e\n',(PE+EPS2))
@@ -207,7 +207,7 @@ X=XT;
 fprintf('The value of H is %2.5e\n',H);
 fprintf('The value of T is %2.5e\n',T);
 fprintf('The number of steps is %d\n',NS)
-pause
+%pause
 if NS==0
     disp('Generating new prediction using taylor estimation');
     taylorEstimation(A,D,Z,X,XT,H,T,PT,NS);            %Use third order taylor method to predict again
@@ -257,13 +257,31 @@ Q=(1+(H/PH))^2;
 fprintf('Q is: %2.5e\n',Q);
 QQ=Q*(H/PH);
 fprintf('QQ is: %2.5e\n',QQ);
-PE=OZ+OZ1*(H+PH)+Q*((Z-OZ)-OZ1*PH)+QQ*(PH*(Z1+OZ1)-2*(Z-OZ));
+PE1=OZ+OZ1*(H+PH)+Q*((Z-OZ)-OZ1*PH)+QQ*(PH*(Z1+OZ1)-2*(Z-OZ));
 fprintf('The value of T is: %2.5e\n',T);
-fprintf('The new predicted eigenvalue is: %2.5e\n',PE);
-pause
-if PH==H
-     taylorEstimation(A,D,Z,X,XT,H,T,PT,NS)
-end
+fprintf('The new predicted eigenvalue is: %2.5e\n',PE1);
+%pause
+   if PH==H
+      PE2=OZ+PT*T;
+      XT=zeros(n,1);
+      XT(k)=1;
+      X=XT;     
+      fprintf('The adjusted predicted eigenvalue is: %2.5e\n',PE2);
+      sc = Count(A,PE2);
+      fprintf('The number of sign changes is: %d\n',sc)
+      if sc > k
+          if PE1>PE2
+             PE = PE1/PE2;
+          else
+             PE = PE2/PE1;
+          end
+      else
+          PE = PE2;
+      end
+   else
+       PE=PE1;
+   end
+
 mainblock(A,D,Z,Z1,H,T,PT,X,XT,PE,NS);
 end
 
@@ -278,20 +296,20 @@ for i=1:n
 end
 
 disp(EV);
-%disp(EVT);
+disp(EVT);
 
 if k==n
-    A=matGen(n,1);
+    A=matGen2(n,0,1);
     disp('The eigenvalues are: ')
     disp(EV);
     disp('The eigenvectors are: ')
-    %disp(EVT);
+    disp(EVT);
     ORT=EVT'*EVT-eye(n);
     disp('The maximum orthogonality is: ');
     disp(max(max(ORT)));
     disp('The maximum residual is: ')
     for i=1:n
-        RES = A*EVT(:,i)-EV(i)*EVT(:,i);
+       RES = A*EVT(:,i)-EV(i)*EVT(:,i);
     end
     RES = max(RES);
     disp(RES);
