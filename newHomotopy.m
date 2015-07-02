@@ -47,14 +47,14 @@ for i=1:n
     DDD(i) = DD(i)-d(i);
 end
 
-alpha=1;
+alpha=0;
 Z=d(k);
 I=eye(n);
 
 XT=zeros(n,1);
 XT(k)=1;
 
-% %To predict the eigenvalue we use a third order taylor method. 
+%To predict the eigenvalue we use a third order taylor method. 
  
 Z1=XT'*(A-D)*XT;                     %Compute first derivative
 XT1=(pinv(Z*I-A)*(A-D))*XT;
@@ -74,7 +74,7 @@ function[] = taylorEstimation(A,D,Z,X,XT,H,T,PT,NS)
 %To predict the eigenvalue we use a third order taylor method. 
 global n 
 I = eye(n);
-alpha = 1;
+alpha = 0;
 %At = D+T*(A-D);
 
 disp('Using Taylor Method to predict eigenvale');
@@ -154,6 +154,7 @@ for i = 1:10
 fprintf('The Residual value is: %2.20e\n',RES);
 fprintf('The roundoff error is: %2.20e\n',EPS1);
 %pause
+%disp(Y)
 if RES<=EPS1
    sc=Count(At,APP-EPS1-EPS3);                       %Compute the number of sign changes
    fprintf('The number of sign changes is %d\n',sc);
@@ -262,26 +263,38 @@ fprintf('The value of T is: %2.5e\n',T);
 fprintf('The new predicted eigenvalue is: %2.5e\n',PE1);
 %pause
    if PH==H
-      PE2=OZ+PT*T;
-      XT=zeros(n,1);
-      XT(k)=1;
-      X=XT;     
+      PE2=OZ+PT+PH;
+      %XT=zeros(n,1);
+      %XT(k)=1;
+      %X=XT;     
       fprintf('The adjusted predicted eigenvalue is: %2.5e\n',PE2);
       sc = Count(A,PE2);
       fprintf('The number of sign changes is: %d\n',sc)
       if sc > k
           if PE1>PE2
-             PE = PE1/PE2;
+             PE=PE2+PE2/PE1;
+             %PE=PE1*PER;
+             %fprintf('The predicted eigenvalue ratio is: %2.5e\n',PE);
           else
-             PE = PE2/PE1;
+             PE=PE1+PE1/PE2;
+             %PE=PE2*PER;
+             %fprintf('The predicted eigenvalue ratio is: %2.5e\n',PE);
           end
       else
           PE = PE2;
+      end     
+      if sc < k-2
+        %Handle cases where sign changes is too few
+        PE = PE+T/2;
       end
-   else
-       PE=PE1;
    end
+   
+if PH ~= H
+   PE = PE1; 
+end
 
+   
+fprintf('The predicted eigenvalue is: %2.5e\n',PE);
 mainblock(A,D,Z,Z1,H,T,PT,X,XT,PE,NS);
 end
 
@@ -295,8 +308,8 @@ for i=1:n
    EVT(i,k)=XT(i);
 end
 
-disp(EV);
-disp(EVT);
+disp(EV(k));
+%disp(EVT);
 
 if k==n
     A=matGen2(n,0,1);
@@ -313,6 +326,13 @@ if k==n
     end
     RES = max(RES);
     disp(RES);
+    E=eig(A);
+    for i = 1:n
+        if (E(i)-EV(i)) > 1e-7
+            disp(EV(i))
+            disp(i);
+        end
+    end
 end
 end
 
