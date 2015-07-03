@@ -65,6 +65,7 @@ Z3=-3*(XT1')*XT2-(3*(XT1')*XT2);     %Compute third derivative
 NS=0;H=1;PT=0;T=1;X=XT;                             
  
 PE=Z+(H*Z1)+(H^2/2)*Z2+(H^3/6)*Z3;   %Predict the eigenvalue 
+
 fprintf('The predicted eigenvalue is: %2.5e\n',PE);
 mainblock(A,D,Z,Z1,H,T,PT,X,XT,PE,NS);  %Begin correction
 end
@@ -264,27 +265,19 @@ fprintf('The new predicted eigenvalue is: %2.5e\n',PE1);
 %pause
    if PH==H
       PE2=OZ+PT+PH;
-      %XT=zeros(n,1);
-      %XT(k)=1;
-      %X=XT;     
       fprintf('The adjusted predicted eigenvalue is: %2.5e\n',PE2);
       sc = Count(A,PE2);
       fprintf('The number of sign changes is: %d\n',sc)
       if sc > k
           if PE1>PE2
              PE=PE2+PE2/PE1;
-             %PE=PE1*PER;
-             %fprintf('The predicted eigenvalue ratio is: %2.5e\n',PE);
           else
              PE=PE1+PE1/PE2;
-             %PE=PE2*PER;
-             %fprintf('The predicted eigenvalue ratio is: %2.5e\n',PE);
           end
       else
           PE = PE2;
-      end     
+      end          
       if sc < k-2
-        %Handle cases where sign changes is too few
         PE = PE+T/2;
       end
    end
@@ -293,7 +286,17 @@ if PH ~= H
    PE = PE1; 
 end
 
-   
+ if NS>30
+     PE=(k-1)+.55*T;
+     XT=zeros(n,1);
+     XT(k)=1;
+     X=XT;
+     sc = Count(A,PE);
+     if sc < k-1
+        PE=PE+3;
+     end
+ end
+ 
 fprintf('The predicted eigenvalue is: %2.5e\n',PE);
 mainblock(A,D,Z,Z1,H,T,PT,X,XT,PE,NS);
 end
@@ -308,7 +311,7 @@ for i=1:n
    EVT(i,k)=XT(i);
 end
 
-disp(EV(k));
+disp(EV);
 %disp(EVT);
 
 if k==n
@@ -326,13 +329,7 @@ if k==n
     end
     RES = max(RES);
     disp(RES);
-    E=eig(A);
-    for i = 1:n
-        if (E(i)-EV(i)) > 1e-7
-            disp(EV(i))
-            disp(i);
-        end
-    end
+    disp(EV);
 end
 end
 
@@ -341,9 +338,9 @@ function [Count] = Count(At,x)
 %This ensures that we are on the correct eigenpath.
 %At - the matrix at t = T
 %x - the predicted eigenvalue
+global n
 Count = 0;
 d=1;
-[~,n]=size(At);
 a=diag(At);
 b=zeros(n,1);
 b(1)=0;
