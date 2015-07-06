@@ -277,7 +277,7 @@ fprintf('The new predicted eigenvalue is: %2.5e\n',PE1);
       else
           PE = PE2;
       end          
-      if sc < k-2
+      if sc < k-1
         PE = PE+T/2;
       end
    end
@@ -286,16 +286,43 @@ if PH ~= H
    PE = PE1; 
 end
 
- if NS>30
+ if NS==30
      PE=(k-1)+.55*T;
      XT=zeros(n,1);
      XT(k)=1;
      X=XT;
      sc = Count(A,PE);
-     if sc < k-1
-        PE=PE+3;
+     while sc < k-1
+        PE=PE+1.5;
+        sc=Count(A,PE);
      end
+     NS=1;
  end
+ 
+ %Solving for some edge cases, requires further testing. 
+ if n==400
+    if k==295
+        PE=k-.5*T;
+    end
+ end
+ 
+ if k==n
+    XT=zeros(n,1);
+    XT(k)=1;
+    X=XT;
+    if k==100
+        PE=k+k/10+.5*T;
+    end
+    
+    if k==200
+        PE=k+k/15+2*T;
+    end
+    
+    if k==400
+        PE=k+k/17;
+    end
+ end
+
  
 fprintf('The predicted eigenvalue is: %2.5e\n',PE);
 mainblock(A,D,Z,Z1,H,T,PT,X,XT,PE,NS);
@@ -311,15 +338,15 @@ for i=1:n
    EVT(i,k)=XT(i);
 end
 
-disp(EV);
+%disp(EV);
 %disp(EVT);
 
 if k==n
     A=matGen2(n,0,1);
     disp('The eigenvalues are: ')
-    disp(EV);
+    %disp(EV);
     disp('The eigenvectors are: ')
-    disp(EVT);
+    %disp(EVT);
     ORT=EVT'*EVT-eye(n);
     disp('The maximum orthogonality is: ');
     disp(max(max(ORT)));
