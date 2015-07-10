@@ -1,15 +1,18 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <cblas.h>
 #include <math.h>
+//#include <cblas.h>
+//#include <lapacke.h>
 #include <time.h>
+
 /*This program computes all of the eigenpairs of symmetric tridiagonal matricies using a Homotopy algorithm*/
 
 //Global variables
 int n = 100;
 int k = 0;
 
-int ReduceStep(double* A, double* D, double *DD, double* XT, double* DDD, double* OO, double H, double PT, double Z, double Z1, double APP, int NS){
+/*This function reduces the step size, alters the homotopy parameter, and resets the eigenvector*/
+int ReduceStep(double *A, double *D, double *DD, double *XT, double *DDD, double *OO, double H, double PT, double Z, double Z1, double APP, int NS){
 	double *X = (double*)calloc(n,sizeof(double));
 	double T;
 	H = H/2;
@@ -27,7 +30,7 @@ int ReduceStep(double* A, double* D, double *DD, double* XT, double* DDD, double
 
 /*Function recomputes PE using Hermite Interpolation.*/
 /*If T == 1, the eigenvalues are stored.*/
-int Predict(double* A, double* D, double* DD, double* X, double* DDD, double* OO, double H, double T, double Z, double Z1, double APP, int NS){
+int Predict(double *A, double *D, double *DD, double *X, double *DDD, double *OO, double H, double T, double Z, double Z1, double APP, int NS){
 	double *XT = (double*)calloc((double)n,sizeof(double));
 	double *HA = (double*)calloc((double)n,sizeof(double));
 	double *EV = (double*)calloc((double)n,sizeof(double));
@@ -58,7 +61,7 @@ int Predict(double* A, double* D, double* DD, double* X, double* DDD, double* OO
 }
 
 /*Function generates the type of matrix as described in Example 1*/
-int Example1(double* A, int n, int m, int k){
+/*int Example1(double *A, int n, int m, int k){
 	int i,j,r;
 	double l;
 	for (i = 0; i<n; i++){
@@ -78,10 +81,10 @@ int Example1(double* A, int n, int m, int k){
 		}
 	}
 	return 0;
-}
+}*/
 
 /*Function generates the type of matrix as described in Example 3*/
-int Example3(double* A, int n){
+int Example3(double *A){
 	int i,j;
 	for(i = 0; i<n; i++){
 		A[i*n+i]= (double) i;
@@ -94,23 +97,23 @@ int Example3(double* A, int n){
 }
 
 /*Function generates an identity matrix of size n*/
-int Identity(double* I, int n){
+int IdentityMat(double *ID){
 	int i;
+	double j=1;
 	for (i = 0; i<n; i++){
-		I[i*n+i] = 1.0;	
+		ID[(i*n)+i] = j;	
 	}
 	return 0;
 }
 
 
 /*Initialize all of the vectors needed for computation*/
-int Initialize(double *A, double *D, double* DD, double* DDD, double* d, double* OO, int n){
+int Initialize(double *A, double *D, double *DD, double *DDD, double *OO){
 	int i;
 	for (i = 0; i<n; i++){
 		DD[i] = A[i*n+i];
 		D[i*n+i] = DD[i];
-		d[i] = D[i*n+i];
-		DDD[i] = DD[i]-d[i];
+		DDD[i] = DD[i]-DD[i];
 	}
 	OO[0]=0;
 	for (i = 1; i<n; i++){
@@ -120,7 +123,7 @@ int Initialize(double *A, double *D, double* DD, double* DDD, double* d, double*
 }
 
 /*Compute the number of sign changes using Sturm Sequence method*/
-int COUNT(double* DD, double* OO, double x){
+int COUNT(double *DD, double *OO, double x){
 	int Count = 0, d = 1,i;
 	
 	for (i = 0; i<n; i++){
@@ -135,40 +138,30 @@ int COUNT(double* DD, double* OO, double x){
 
 /*Approximate an eigenvector with Inverse Iteration*/
 double * II(double *At, double *X, double APP, int j){
-	double *W = (double*)calloc(n,sizeof(double));
-	double *I = (double*)calloc(n*n,sizeof(double));
+	double *W = (double*)calloc(n*n,sizeof(double));
+	double *ID = (double*)calloc(n*n,sizeof(double));
 	double *Y = (double*)calloc(n,sizeof(double));
-	double *DL= (double*)calloc(n,sizeof(double)); 
-	double *D = (double*)calloc(n,sizeof(double));
-	double *DU= (double*)calloc(n,sizeof(double));
+	int *IPIV = (int*)calloc(n,sizeof(int));
 	double norm;	
-	int i,INFO;
-	char N;	
+	int i,NRHS=1,LDY=1, INFO;
 	
-	Identity(I,n);
-    cblas_dcopy(N,At,1,W,1); //W = At;
-	cblas_dscal(n,APP,I,1); //I = I*APP;
-	cblas_daxpy(n,-1,I,1,W,1); // W = W-I;
+	IdentityMat(ID);
+    cblas_dcopy(n,At,1,W,1); //W = At;
+	cblas_dscal(n,APP,ID,1); //I = I*APP;
+	cblas_daxpy(n,-1,ID,1,W,1); // W = W-I;
 	
-	//Obtain DL, D, DU for dgtsv
-	for (i=0; i<n; i++){
-		DL[i] = W[i*n+(i-1)];
-		D[i]  = W[i*n+i];		
-		DU[i] = DL[i];
-	}
-
 	for (i=0; i<=j; i++){
 		//Perform Inverse Iteration
 		norm = cblas_dnrm2(n,X,1); //norm(X);
 		cblas_dscal(n,1/norm,X,1); // X <- X*1/norm(X)
 		cblas_dcopy(n,X,1,Y,1); // Y <- X
-		cblas_dgtsv(N,1,DL,D,DU,Y,n,INFO); //W*X = Y 		
+	    INFO = dgesv_(n,NRHS,W,n,IPIV,Y,LDY); //W*X = Y 		
 	}
 	norm = cblas_dnrm2(n,X,1); //norm(X);
 	cblas_dscal(n,1/norm,X,1); // X <- X*1/norm(X)
     cblas_dcopy(n,X,1,Y,1); // Y <- X
 	free(W);
-	free(I);
+	free(ID);
 	return Y;
 }
 
@@ -187,14 +180,14 @@ double RQI(double *At, double *X, int j){
 		//Peform Rayleigh Quotient Iteration
 		norm = cblas_dnrm2(n,X,incx); //norm(X)
 		cblas_dscal(n,1/norm,X,incx); //X <- X*1/norm(X);
-		cblas_dgemv_(N,n,n,alpha,*At,n,*X,incx,beta,u,&incy); //u <- At*X
+		dgemv_(N,n,n,alpha,*At,n,*X,incx,beta,u,&incy); //u <- At*X
 		APP = cblas_ddot(n,X,incx,u,incy); //APP <- X'*u
 	}
 	free(u);
 	return APP;
 }
 /*The main block of the program. It corrects the prediction computed.*/
-int mainblock(double* A, double* D, double* DD, double* DDD, double* OO, double* X, double* XT, double Z, double Z1, double H, double T, double PT, double PE, int NS){
+int mainblock(double *A, double *D, double *DD, double *DDD, double *OO, double *X, double *XT, double Z, double Z1, double H, double T, double PT, double PE, int NS){
 
 	double eps, EPS, EPS1, EPS2, EPS3, NORM, SUMA, SUMB, APP, RES;
 	int i,sc,KK;
@@ -202,7 +195,7 @@ int mainblock(double* A, double* D, double* DD, double* DDD, double* OO, double*
 	//Set the error tolerances for the program
 	eps = 1.11E-16;
 
-	for (i = 0; i=n; i++){
+	for (i = 0; i<n; i++){
 		SUMA+=abs(DD[i]);
 		SUMB+=abs(OO[i]);
 	}
@@ -217,21 +210,26 @@ int mainblock(double* A, double* D, double* DD, double* DDD, double* OO, double*
 	else{
 		EPS1=sqrt(EPS);
 	}
-
+	
 	//////////////////////////////////////////////////
 
-	double *At = (double*)calloc(n*n,sizeof(double*));
+	double *At = (double*)calloc(n*n,sizeof(double));
 	double *Y = (double*)calloc(n,sizeof(double));
 	double *AY = (double*)calloc(n,sizeof(double));
 	double *APPY = (double*)calloc(n,sizeof(double));	
 	int j=1;
 	int incx=1;
 	int incy=1;
+	int nincx=-1;
 	int alpha =1;
 	int beta = 1;
 	int LDA=1;
 	char N;
 	//At = D + T*(A-D);
+	cblas_dcopy(n,A,1,At,1);//At <- A
+	cblas_daxpy(n,nincx,D,incx,At,incy); //At <- A-D
+	cblas_dscal(n,T,At,incx); //At <- T*(A-D)
+	cblas_daxpy(n,alpha,D,incx,At,incy); // At <- D + T*(A-D)
 	cblas_dcopy(n,X,1,Y,1);
 	APP = PE;
 	sc = COUNT(DD,OO,PE);
@@ -244,10 +242,10 @@ int mainblock(double* A, double* D, double* DD, double* DDD, double* OO, double*
 		Y = II(At,Y,APP,j);
 		//Compute Residual
 		cblas_dcopy(N,Y,incy,APPY,incy);//APPY <- Y
-		cblas_dgemv_(N,n,n,alpha,A,LDA,Y,incy,beta,AY,incy);//AY <- A*Y
+		dgemv_(N,n,n,alpha,A,LDA,Y,incy,beta,AY,incy);//AY <- A*Y
 		cblas_dscal(n,APP,APPY,incy);//APPY <- APP*Y
 		cblas_daxpy(N,-alpha,APPY,incy,AY,incy);//RES <- A*Y-APP*Y
-		RES = cblas_isamax(n,APPY,1);//RES <- max(RES);
+		RES = isamax_(n,APPY,1);//RES <- max(RES);
 		if (RES<=EPS1){
 			sc = COUNT(DD,OO,APP-EPS1-EPS3);
 			if (sc==k-1){
@@ -284,16 +282,24 @@ int mainblock(double* A, double* D, double* DD, double* DDD, double* OO, double*
 			return 0;
 		}
 	}
+	free(At);
+	free(Y);
+	free(AY);
+	free(APPY);
 	return 0;		
 }
 //Main
 int main(void){
 	//Other important variables
-	double H, PT, T, Z, Z1, Z2, Z3, PE;	
-	int NS=0,alpha=0,i;
-	char N; 
+	double alpha, beta, H, PT, T, Z, Z1, Z2, Z3, PE;	
+	int NS=0,i,incx, incy,nincx;
+
 	H = PT = 0;
-	T = 1;
+	T = 1.0;
+
+	incx = incy = 1;
+	nincx=-1;
+	alpha = beta = 1.0;
 	clock_t t; 
 	//Matrices
 	double *A = (double*)calloc(n*n,sizeof(double));
@@ -308,23 +314,31 @@ int main(void){
 	double *XT = (double*)calloc(n,sizeof(double));
 	double *XTprime = (double*)calloc(n,sizeof(double));
 
-	Example3(A,n);
-	Initialize(A,D,DD,DDD,d,OO,n);
-	
+	Example3(A);
+	Initialize(A,D,DD,DDD,OO);
+	d[k]=1.0;
 	t = clock();
-	for (i = 0; i<=n; i++){
+	printf("Beginning Computation\n");
+	for (i = 0; i<n; i++){
 		k=i;
 		Z=d[k];
 		XT[k]=1;
+		printf("Copying Vectors and Matrices\n");
 		//Copy vectors and matrices
-	    cblas_dcopy(n,A,1,Acopy,1);// Acopy <- A
-		cblas_dcopy(n,XT,1,X,1);//X <- XT
+	    cblas_dcopy(n,A,incx,Acopy,incy);// Acopy <- A
+		cblas_dcopy(n,XT,incx,X,incx);//X <- XT
 		//Compute first derivative
-		cblas_daxpy(n,-1,D,1,Acopy,1);//A <- -1*D + A
-		cblas_dgemv_(N,n,n,1,*Acopy,n,*XT,1,1,XTprime,1); //XT' <- (A-D)*XT
+		printf("Computing Z1\n");
+		cblas_daxpy(n,nincx,D,incx,Acopy,incx);//A <- -1*D + A
+		printf("!!!!\n");
+		dgemv_("t",&n,&n,&alpha,Acopy,&n,XT,&incx,&beta,XTprime,&incy); //XT' <- (A-D)*XT
+		printf("!!!!\n");
 		Z1 = cblas_ddot(n,XT,1,XTprime,1);//Z1 <- XT'*((A-D)*XT)
 		//Predict eigenvalue with first order taylor method
 		PE=Z+Z1*H;
+		printf("!!!!\n");
+		printf("PE = %3.5f\n",PE);
+		printf("Beginning Correction.\n");
 		mainblock(A, D, DD, DDD, OO, X, XT, Z, Z1, H, T, PT, PE, NS);
 	}
 	//Free all allocated memory
@@ -340,4 +354,5 @@ int main(void){
 	//fprintf("Total execution time: %f seconds\n", (float)t/CLOCKS_PER_SEC);
 	return 0;
 }
+
 
