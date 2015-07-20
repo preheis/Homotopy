@@ -8,8 +8,15 @@
 /*This program computes all of the eigenpairs of symmetric tridiagonal matricies using a Homotopy algorithm*/
 
 //Global variables
-const int N = 4;
-int k = 1;
+const int N = 16384;
+int k = 3;
+//Compare function for quicksort
+int compare (const void * a, const void * b){
+	double aa = *(double*)a, bb = *(double*)b;
+	if (aa<bb) return -1;
+	if (aa>bb) return 1;
+	return 0;
+}
 
 /*Function generates the type of matrix as described in Example 3*/
 int Example3(double *A){
@@ -76,7 +83,7 @@ int ReduceStep(double *A, double *D, double *DD, double *X, double *XT, double *
 	return 0;	
 }
 
-int initialPrediction(int k){
+int initialPrediction(int k,double *EVT){
 	    //Matrices
 		double *A = (double*)calloc(N*N,sizeof(double));
 		double *D = (double*)calloc(N*N,sizeof(double));
@@ -119,55 +126,29 @@ int initialPrediction(int k){
 		printf("Beginning Correction.\n");
 		free(AD);
 		free(XTprime);
-		mainblock(A, D, DD, DDD, OO, X, XT, Z, Z1, H, T, PT, PE, NS);
+		mainblock(A, D, DD, DDD, OO, X, XT, Z, Z1, H, T, PT, PE, NS, EVT);
 	return 0;
 }
 
-/*Function recomputes PE using Hermite Interpolation.*/
-/*If T == 1, the eigenvalues are stored.*/
-int Predict(double *A, double *D, double *DD, double *XT,double *X, double *DDD, double *OO, double H, double T, double Z, double Z1, double APP, int NS){
-	double *HA = (double*)calloc(N,sizeof(double));	
-	double OZ=Z, OZ1=Z1, Q, QQ, PH=H, PT=T,PE;
+/*This function computes the maximum orthogonality of the estimated eigenvector*/
+double computeORT(double *X){
+	double *ID = (double*)calloc(N*N,sizeof(double));
+	double *IDV = (double*)calloc(N*N,sizeof(double));
+	double *XTX = (double*)calloc(N*N,sizeof(double));
+	double *XTXV = (double*)calloc(N*N,sizeof(double));
+	double *ORT = (double*)calloc(N*N,sizeof(double));
+	double alpha, beta;
+	double maxORT;
+	int incx = 1;
+	int LDX = N;
 	int i;
-
-	H = 1-PT; T = 1; NS+=1; 
-
-	cblas_dcopy(N,X,1,XT,1); //XT<-X
-
-	if (T==1){
-		printf("Storing the eigenvalue and eigenvector!\n");
-		printf("%.15f\n",APP);
-		///////////////////////
-		free(A);
-		free(D);
-		free(DD);
-		free(DDD);
-		free(OO);
-		free(X);
-		free(XT);
-		///////////////////////
-		k++;
-		printf("%d\n",k);
-		if (k>N){
-			exit(1);		
-		}	
-		initialPrediction(k);
-		return 0;	
-	}
-	else{
-		//Recompute Z1
-		HA[0]=DDD[0]*X[0]+OO[1]*X[1];
-		for (i = 1; i<N-1; i++){HA[i]=OO[i]*X[i-1]+DDD[i]*X[i]+OO[i+1]*X[i+1];}
-		HA[N-1]=OO[N-1]*X[N-2]+DDD[N-1]*X[N-1];
-		//Recompute PE
-		Q = pow(1+(PH/H),2);
-		QQ = Q*(H/PH);
-		PE=OZ+OZ1*(H+PH)+Q*((Z-OZ)-OZ1*PH)+QQ*(PH*(Z+OZ1)-2*(Z-OZ));
-
-		mainblock(A, D, DD, DDD, OO, X, XT, Z, Z1, H, T, PT, PE, NS);
-	}
-	free(HA);
-	return 0;
+	alpha = beta = 0; 
+	IdentityMat(ID);
+	cblas_dgemm(CblasRowMajor,CblasTrans,CblasNoTrans,N,N,N,alpha,X,LDX,X,LDX,beta,XTX,LDX);
+	for (i=0; i<N; i++){IDV[i] = ID[i*N+i];}
+	for (i=0; i<N; i++){XTXV[i] = XTX[i*N+i];}
+	cblas_daxpy(N,-alpha,IDV,incx,XTXV,incx);
+	return maxORT;
 }
 
 /*This function computes the residual of the vector obtain from II*/
@@ -189,11 +170,74 @@ double computeRES(double* A, double* X, double APP){
 			maxRES = (APPX[i]);
 		}
 	}
-	printf("The residual is %.17e\n",maxRES);
+	qsort(APPX,N,sizeof(double),compare);
+	maxRES = APPX[N-1];
+	//printf("The maximum residual is %.17e\n",maxRES);
 	free(AX);
 	free(APPX);
 	return maxRES;
 }
+/*Function recomputes PE using Hermite Interpolation.*/
+/*If T == 1, the eigenvalues are stored.*/
+int Predict(double *A, double *D, double *DD, double *XT,double *X, double *DDD, double *OO, double H, double T, double Z, double Z1, double APP, int NS, double *EVT){
+	double *HA = (double*)calloc(N,sizeof(double));	
+	double OZ=Z, OZ1=Z1, Q, QQ, PH=H, PT=T,PE,RES,maxRES,ORT,maxORT;
+	int i,j;
+
+	H = 1-PT; T = 1; NS+=1; 
+	
+	cblas_dcopy(N,X,1,XT,1); //XT<-X
+	
+	if (T==1){
+		printf("Storing the eigenvalue and eigenvector!\n");
+		printf("%.15f\n",APP);
+		for (i=0; i<N; i++){
+			j = k;
+			EVT[i*N+j] = X[i];		
+		}
+		if (k==1){
+			maxRES = maxORT = 0.0;
+			RES = maxRES;
+			ORT = maxORT;
+		}
+		RES = computeRES(A,X,APP);
+		if (RES>maxRES){maxRES = RES;}
+		
+		///////////////////////
+		free(A);
+		free(D);
+		free(DD);
+		free(DDD);
+		free(OO);
+		free(X);
+		free(XT);
+		///////////////////////
+		k++;
+		if (k>N){
+			printf("The maximum residual is %.17e\n",maxRES);
+			ORT = computeORT(EVT);
+			printf("The maximum orthogonality is %.17e\n",ORT);
+			return 0;		
+		}	
+		//initialPrediction(k);
+		return 0;	
+	}
+	else{
+		//Recompute Z1
+		HA[0]=DDD[0]*X[0]+OO[1]*X[1];
+		for (i = 1; i<N-1; i++){HA[i]=OO[i]*X[i-1]+DDD[i]*X[i]+OO[i+1]*X[i+1];}
+		HA[N-1]=OO[N-1]*X[N-2]+DDD[N-1]*X[N-1];
+		//Recompute PE
+		Q = pow(1+(PH/H),2);
+		QQ = Q*(H/PH);
+		PE=OZ+OZ1*(H+PH)+Q*((Z-OZ)-OZ1*PH)+QQ*(PH*(Z+OZ1)-2*(Z-OZ));
+
+		mainblock(A, D, DD, DDD, OO, X, XT, Z, Z1, H, T, PT, PE, NS);
+	}
+	free(HA);
+	return 0;
+}
+
 
 /*Approximate an eigenvector with Inverse Iteration*/
 double * II(double *At, double *X, double APP, int j){
@@ -214,17 +258,16 @@ double * II(double *At, double *X, double APP, int j){
 	norm = cblas_dnrm2(N,X,1); //norm(X);
 	cblas_dscal(N,1/norm,X,1); // X <- X*1/norm(X)
     printf("Solving the system of linear equations...\n"); 
-    INFO = LAPACKE_dgesv(LAPACK_ROW_MAJOR,N,NRHS,W,LDA,IPIV,X,LDB);			
+    INFO = LAPACKE_dgesv(LAPACK_ROW_MAJOR,N,NRHS,W,LDA,IPIV,X,LDB);
 	norm = cblas_dnrm2(N,X,1); //norm(X);
 	cblas_dscal(N,1/norm,X,1); // X <- X*1/norm(X)
 	
 	free(W);
 	free(ID);
 	free(IPIV);
-
 	printf("Ending Inverse Iteration\n");
-	printf("The new approximate eigenvector is: \n");
-	printVec(X);
+	//printf("The new approximate eigenvector is: \n");
+	//printVec(X);
 	return X;
 }
 
@@ -250,8 +293,7 @@ double RQI(double *At, double *X, int j){
 }
 
 /*The main block of the program. It corrects the prediction computed.*/
-int mainblock(double *A, double *D, double *DD, double *DDD, double *OO, double *X, double *XT, double Z, double Z1, double H, double T, double PT, double PE, int NS){
-
+int mainblock(double *A, double *D, double *DD, double *DDD, double *OO, double *X, double *XT, double Z, double Z1, double H, double T, double PT, double PE, int NS, double* EVT){
 	double eps, EPS, EPS1, EPS2, EPS3, NORM, SUMA, SUMB, APP, RES;
 	int i,sc,KK,j;
 	
@@ -303,7 +345,7 @@ int mainblock(double *A, double *D, double *DD, double *DDD, double *OO, double 
 			printf("The number of sign changes is %d\n",sc);
 			if (sc==k-1){
 				printf("Recomputing the predicted eigenvalue...\n");
-				Predict(A,D,DD,XT,X,DDD,OO,H,T,Z,Z1,APP,NS);
+				Predict(A,D,DD,XT,X,DDD,OO,H,T,Z,Z1,APP,NS,EVT);
 				return 0;			
 			}
 			else if (sc>k-1){
@@ -316,7 +358,7 @@ int mainblock(double *A, double *D, double *DD, double *DDD, double *OO, double 
 				printf("The number of sign changes is %d\n",sc);
 				if (sc>=k){
 					printf("Recomputing the predicted eigenvalue...\n");
-					Predict(A,D,DD,XT,X,DDD,OO,H,T,Z,Z1,APP,NS);
+					Predict(A,D,DD,XT,X,DDD,OO,H,T,Z,Z1,APP,NS,EVT);
 					return 0;				
 				}
 			}		
@@ -356,7 +398,24 @@ int printMat(double *A){
 
 int printVec(double *X){
 	int i;
-	for (i = 0; i<N; i++){printf("%f\n",X[i]);}
+	for (i = 0; i<N; i++){printf("%.15f\n",X[i]);}
 	return 0;	
 }
 
+
+//Main
+int main(void){
+	int i;
+	clock_t begin, end;
+	double time;
+	double* EVT = (double*)calloc(N*N,sizeof(double));
+	for (i = 1; i<=N; i++){
+		begin = clock();
+		initialPrediction(k,EVT);
+		end = clock();
+		time = (double)(end-begin)/CLOCKS_PER_SEC;
+		printf("The total computation time is: %f\n",time*(N-2));
+	}
+	free(EVT);
+	return 0;
+}
