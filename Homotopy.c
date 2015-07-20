@@ -9,7 +9,7 @@
 
 //Global variables
 const int N = 16384;
-int k = 3;
+int k = 1;
 //Compare function for quicksort
 int compare (const void * a, const void * b){
 	double aa = *(double*)a, bb = *(double*)b;
