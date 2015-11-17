@@ -8,15 +8,8 @@
 /*This program computes all of the eigenpairs of symmetric tridiagonal matricies using a Homotopy algorithm*/
 
 //Global variables
-const int N = 16384;
-int k = 1;
-//Compare function for quicksort
-int compare (const void * a, const void * b){
-	double aa = *(double*)a, bb = *(double*)b;
-	if (aa<bb) return -1;
-	if (aa>bb) return 1;
-	return 0;
-}
+const int N = 7500;
+int k = 3240;
 
 /*Function generates the type of matrix as described in Example 3*/
 int Example3(double *A){
@@ -130,32 +123,12 @@ int initialPrediction(int k,double *EVT){
 	return 0;
 }
 
-/*This function computes the maximum orthogonality of the estimated eigenvector*/
-double computeORT(double *X){
-	double *ID = (double*)calloc(N*N,sizeof(double));
-	double *IDV = (double*)calloc(N*N,sizeof(double));
-	double *XTX = (double*)calloc(N*N,sizeof(double));
-	double *XTXV = (double*)calloc(N*N,sizeof(double));
-	double *ORT = (double*)calloc(N*N,sizeof(double));
-	double alpha, beta;
-	double maxORT;
-	int incx = 1;
-	int LDX = N;
-	int i;
-	alpha = beta = 0; 
-	IdentityMat(ID);
-	cblas_dgemm(CblasRowMajor,CblasTrans,CblasNoTrans,N,N,N,alpha,X,LDX,X,LDX,beta,XTX,LDX);
-	for (i=0; i<N; i++){IDV[i] = ID[i*N+i];}
-	for (i=0; i<N; i++){XTXV[i] = XTX[i*N+i];}
-	cblas_daxpy(N,-alpha,IDV,incx,XTXV,incx);
-	return maxORT;
-}
 
 /*This function computes the residual of the vector obtain from II*/
 double computeRES(double* A, double* X, double APP){
 	double *AX = (double*)calloc(N,sizeof(double));
 	double *APPX = (double*)calloc(N,sizeof(double));
-	double maxRES,alpha,beta;
+	double RES,alpha,beta;
 	int incx,incy,i,j;
 	alpha = beta = 1.0;
 	incx = incy = 1;
@@ -163,19 +136,11 @@ double computeRES(double* A, double* X, double APP){
 	cblas_dscal(N,-APP,APPX,incx);//APPY <- APP*Y
 	cblas_dgemv(CblasRowMajor,CblasNoTrans,N,N,alpha,A,N,X,incx,beta,AX,incx);//AY <- A*Y
 	cblas_daxpy(N,alpha,AX,incx,APPX,incx);
-	printf("Finding the maximal element...\n");
-	maxRES = 0.0;
-	for (i = 0; i<N; i++){
-		if ((APPX[i])>maxRES){
-			maxRES = (APPX[i]);
-		}
-	}
-	qsort(APPX,N,sizeof(double),compare);
-	maxRES = APPX[N-1];
-	//printf("The maximum residual is %.17e\n",maxRES);
+	RES = cblas_dnrm2(N,APPX,1);
+	printf("The maximum residual is %.17e\n",RES);
 	free(AX);
 	free(APPX);
-	return maxRES;
+	return RES;
 }
 /*Function recomputes PE using Hermite Interpolation.*/
 /*If T == 1, the eigenvalues are stored.*/
@@ -191,10 +156,6 @@ int Predict(double *A, double *D, double *DD, double *XT,double *X, double *DDD,
 	if (T==1){
 		printf("Storing the eigenvalue and eigenvector!\n");
 		printf("%.15f\n",APP);
-		for (i=0; i<N; i++){
-			j = k;
-			EVT[i*N+j] = X[i];		
-		}
 		if (k==1){
 			maxRES = maxORT = 0.0;
 			RES = maxRES;
@@ -219,7 +180,6 @@ int Predict(double *A, double *D, double *DD, double *XT,double *X, double *DDD,
 			printf("The maximum orthogonality is %.17e\n",ORT);
 			return 0;		
 		}	
-		//initialPrediction(k);
 		return 0;	
 	}
 	else{
@@ -244,6 +204,9 @@ double * II(double *At, double *X, double APP, int j){
 	printf("Beginning Inverse Iteration...\n");
 	double *W = (double*)calloc(N*N,sizeof(double));
 	double *ID = (double*)calloc(N*N,sizeof(double));
+	double *DL = (double*)calloc(N-1,sizeof(double));
+	double *D = (double*)calloc(N,sizeof(double));
+	double *DU = (double*)calloc(N-1,sizeof(double));
 	int *IPIV = (int*)malloc(N*sizeof(int));
 	double norm=0, SUM = 0;	
 	int i,l,NRHS=1,LDB=1,LDA=N, INFO;
@@ -254,14 +217,21 @@ double * II(double *At, double *X, double APP, int j){
 			W[i*N+l] = At[i*N+l] - APP*ID[i*N+l];		
 		}	
 	}
-
+	//Get diagonal
+	for (i = 0; i<N; i++){
+		D[i] = W[i*N+i];	
+	}
+	//Get upper and lower diagonals
+	for (i = 0; i<N-1; i++){
+		DL[i] = W[(i*N+i)+1];
+		DU[i] = DL[i];	
+	}
 	norm = cblas_dnrm2(N,X,1); //norm(X);
 	cblas_dscal(N,1/norm,X,1); // X <- X*1/norm(X)
     printf("Solving the system of linear equations...\n"); 
-    INFO = LAPACKE_dgesv(LAPACK_ROW_MAJOR,N,NRHS,W,LDA,IPIV,X,LDB);
+    INFO = LAPACKE_dgtsv(LAPACK_ROW_MAJOR,N,NRHS,DL,D,DU,X,LDB);
 	norm = cblas_dnrm2(N,X,1); //norm(X);
 	cblas_dscal(N,1/norm,X,1); // X <- X*1/norm(X)
-	
 	free(W);
 	free(ID);
 	free(IPIV);
@@ -408,14 +378,13 @@ int main(void){
 	int i;
 	clock_t begin, end;
 	double time;
-	double* EVT = (double*)calloc(N*N,sizeof(double));
-	for (i = 1; i<=N; i++){
-		begin = clock();
+	begin = clock();	
+	for (i = 1; i<=21; i++){	
 		initialPrediction(k,EVT);
-		end = clock();
-		time = (double)(end-begin)/CLOCKS_PER_SEC;
-		printf("The total computation time is: %f\n",time*(N-2));
+		printf("k = %d\n",k);	
 	}
-	free(EVT);
+	end = clock();
+	time = (double)(end-begin)/CLOCKS_PER_SEC;	
+	printf("The total computation time is: %f\n",time);
 	return 0;
 }
