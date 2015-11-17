@@ -76,7 +76,7 @@ int ReduceStep(double *A, double *D, double *DD, double *X, double *XT, double *
 	return 0;	
 }
 
-int initialPrediction(int k,double *EVT){
+int initialPrediction(int k){
 	    //Matrices
 		double *A = (double*)calloc(N*N,sizeof(double));
 		double *D = (double*)calloc(N*N,sizeof(double));
@@ -119,7 +119,7 @@ int initialPrediction(int k,double *EVT){
 		printf("Beginning Correction.\n");
 		free(AD);
 		free(XTprime);
-		mainblock(A, D, DD, DDD, OO, X, XT, Z, Z1, H, T, PT, PE, NS, EVT);
+		mainblock(A, D, DD, DDD, OO, X, XT, Z, Z1, H, T, PT, PE, NS);
 	return 0;
 }
 
@@ -144,7 +144,7 @@ double computeRES(double* A, double* X, double APP){
 }
 /*Function recomputes PE using Hermite Interpolation.*/
 /*If T == 1, the eigenvalues are stored.*/
-int Predict(double *A, double *D, double *DD, double *XT,double *X, double *DDD, double *OO, double H, double T, double Z, double Z1, double APP, int NS, double *EVT){
+int Predict(double *A, double *D, double *DD, double *XT,double *X, double *DDD, double *OO, double H, double T, double Z, double Z1, double APP, int NS){
 	double *HA = (double*)calloc(N,sizeof(double));	
 	double OZ=Z, OZ1=Z1, Q, QQ, PH=H, PT=T,PE,RES,maxRES,ORT,maxORT;
 	int i,j;
@@ -176,8 +176,6 @@ int Predict(double *A, double *D, double *DD, double *XT,double *X, double *DDD,
 		k++;
 		if (k>N){
 			printf("The maximum residual is %.17e\n",maxRES);
-			ORT = computeORT(EVT);
-			printf("The maximum orthogonality is %.17e\n",ORT);
 			return 0;		
 		}	
 		return 0;	
@@ -263,7 +261,7 @@ double RQI(double *At, double *X, int j){
 }
 
 /*The main block of the program. It corrects the prediction computed.*/
-int mainblock(double *A, double *D, double *DD, double *DDD, double *OO, double *X, double *XT, double Z, double Z1, double H, double T, double PT, double PE, int NS, double* EVT){
+int mainblock(double *A, double *D, double *DD, double *DDD, double *OO, double *X, double *XT, double Z, double Z1, double H, double T, double PT, double PE, int NS){
 	double eps, EPS, EPS1, EPS2, EPS3, NORM, SUMA, SUMB, APP, RES;
 	int i,sc,KK,j;
 	
@@ -315,7 +313,7 @@ int mainblock(double *A, double *D, double *DD, double *DDD, double *OO, double 
 			printf("The number of sign changes is %d\n",sc);
 			if (sc==k-1){
 				printf("Recomputing the predicted eigenvalue...\n");
-				Predict(A,D,DD,XT,X,DDD,OO,H,T,Z,Z1,APP,NS,EVT);
+				Predict(A,D,DD,XT,X,DDD,OO,H,T,Z,Z1,APP,NS);
 				return 0;			
 			}
 			else if (sc>k-1){
@@ -328,7 +326,7 @@ int mainblock(double *A, double *D, double *DD, double *DDD, double *OO, double 
 				printf("The number of sign changes is %d\n",sc);
 				if (sc>=k){
 					printf("Recomputing the predicted eigenvalue...\n");
-					Predict(A,D,DD,XT,X,DDD,OO,H,T,Z,Z1,APP,NS,EVT);
+					Predict(A,D,DD,XT,X,DDD,OO,H,T,Z,Z1,APP,NS);
 					return 0;				
 				}
 			}		
@@ -380,7 +378,7 @@ int main(void){
 	double time;
 	begin = clock();	
 	for (i = 1; i<=21; i++){	
-		initialPrediction(k,EVT);
+		initialPrediction(k);
 		printf("k = %d\n",k);	
 	}
 	end = clock();
